@@ -824,10 +824,14 @@ void StartLevel(GAMEOPTIONS *gameOptions)
         FixupSecretCounter(0, 8, 7);
     }
 
+    if (gGameOptions.nGameType != kGameTypeSinglePlayer)
+    {
+        gSkill = gPacketStartGame.difficulty;
+    }
+
     switch (gSkill)
     {
     case 0 : 
-
         if (Bstrcmp(pINISelected->zName, "CRYPTIC.INI"))
         {
             FixupKillCounter(0, 5, -1); //A gargoyle out of bounds
