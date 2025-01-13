@@ -1350,9 +1350,6 @@ void ProcessFrame(void)
     viewUpdateDelirium();
     viewUpdateShake();
     sfxUpdate3DSounds();
-    gLevelTime++;
-    gFrame++;
-    gFrameClock += kTicsPerFrame;
     if ((gGameOptions.uGameFlags&kGameFlagContinuing) && !gStartNewGame)
     {
         ready2send = 0;
