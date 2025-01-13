@@ -3137,7 +3137,10 @@ void actKillDude(int nKillerSprite, spritetype *pSprite, DAMAGE_TYPE damageType,
     case kDudeCultistShotgun:
     case kDudeCultistTesla:
     case kDudeCultistTNT:
-        sfxPlay3DSound(pSprite, 1018+Random(2), -1, 0);
+        if (!VanillaMode()) // trigger cultist death scream sfx over cultist alerts sfx channel
+            sfxPlay3DSound(pSprite, 1018+Random(2), kMaxSprites+pSprite->index, 1|8); // cultist alert sfx use kMaxSprites+sprite index as channel
+        else
+            sfxPlay3DSound(pSprite, 1018+Random(2), -1, 0);
         if (nSeq == 3)
             seqSpawn(dudeInfo[nType].seqStartID+nSeq, 3, nXSprite, nDudeToGibClient2);
         else
@@ -4728,7 +4731,6 @@ void MoveDude(spritetype *pSprite)
                     evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
                     sfxPlay3DSound(pSprite, 720, -1, 0);
                     aiNewState(pSprite, pXSprite, &gillBeastSwimGoto);
-
                     pSprite->flags &= ~6;
                     break;
                 case kDudeGargoyleFlesh:
@@ -4765,77 +4767,6 @@ void MoveDude(spritetype *pSprite)
             }
             break;
         }
-        /*case 13:
-            pXSprite->medium = kMediumGoo;
-            if (pPlayer)
-            {
-                pPlayer->changeTargetKin = 1;
-                pXSprite->burnTime = 0;
-                pPlayer->bubbleTime = klabs(zvel[nSprite])>>12;
-                evPost(nSprite, 3, 0, kCallbackPlayerBubble);
-                sfxPlay3DSound(pSprite, 720, -1, 0);
-            }
-            else
-            {
-                switch (pSprite->type)
-                {
-                case kDudeCultistTommy:
-                case kDudeCultistShotgun:
-                    pXSprite->burnTime = 0;
-                    evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                    sfxPlay3DSound(pSprite, 720, -1, 0);
-                    aiNewState(pSprite, pXSprite, &cultistSwimGoto);
-                    break;
-                case kDudeBurningCultist:
-                    if (Chance(0x400))
-                    {
-                        pSprite->type = kDudeCultistTommy;
-                        pXSprite->burnTime = 0;
-                        evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                        sfxPlay3DSound(pSprite, 720, -1, 0);
-                        aiNewState(pSprite, pXSprite, &cultistSwimGoto);
-                    }
-                    else
-                    {
-                        pSprite->type = kDudeCultistShotgun;
-                        pXSprite->burnTime = 0;
-                        evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                        sfxPlay3DSound(pSprite, 720, -1, 0);
-                        aiNewState(pSprite, pXSprite, &cultistSwimGoto);
-                    }
-                    break;
-                case kDudeZombieAxeNormal:
-                    pXSprite->burnTime = 0;
-                    evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                    sfxPlay3DSound(pSprite, 720, -1, 0);
-                    aiNewState(pSprite, pXSprite, &zombieAGoto);
-                    break;
-                case kDudeZombieButcher:
-                    pXSprite->burnTime = 0;
-                    evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                    sfxPlay3DSound(pSprite, 720, -1, 0);
-                    aiNewState(pSprite, pXSprite, &zombieFGoto);
-                    break;
-                case kDudeGillBeast:
-                    pXSprite->burnTime = 0;
-                    evPost(nSprite, 3, 0, kCallbackEnemeyBubble);
-                    sfxPlay3DSound(pSprite, 720, -1, 0);
-                    aiNewState(pSprite, pXSprite, &gillBeastSwimGoto);
-                    pSprite->flags &= ~6;
-                    break;
-                case kDudeGargoyleFlesh:
-                case kDudeHellHound:
-                case kDudeSpiderBrown:
-                case kDudeSpiderRed:
-                case kDudeSpiderBlack:
-                case kDudeBat:
-                case kDudeRat:
-                case kDudeBurningInnocent:
-                    actKillDude(pSprite->index, pSprite, kDamageFall, 1000<<4);
-                    break;
-                }
-            }
-            break;*/
         }
     }
     GetSpriteExtents(pSprite, &top, &bottom);
@@ -5843,7 +5774,7 @@ void actProcessSprites(void)
                 {
                     const char bDivingSuit = packItemActive(pPlayer, kPackDivingSuit);
                     if (bDivingSuit || pPlayer->godMode)
-                        pPlayer->underwaterTime = 1200;
+                        pPlayer->underwaterTime = kTicRate*10;
                     else
                         pPlayer->underwaterTime = ClipLow(pPlayer->underwaterTime-kTicsPerFrame, 0);
                     if (pPlayer->underwaterTime < 1080 && packCheckItem(pPlayer, kPackDivingSuit) && !bDivingSuit)
@@ -5993,7 +5924,6 @@ spritetype * actSpawnSprite(spritetype *pSource, int nStat);
 
 spritetype *actSpawnDude(spritetype *pSource, short nType, int a3, int a4)
 {
-    XSPRITE* pXSource = &xsprite[pSource->extra];
     spritetype *pSprite2 = actSpawnSprite(pSource, kStatDude);
     if (!pSprite2) return NULL;
     XSPRITE *pXSprite2 = &xsprite[pSprite2->extra];
@@ -6029,6 +5959,7 @@ spritetype *actSpawnDude(spritetype *pSource, short nType, int a3, int a4)
     // add a way to inherit some values of spawner type 18 by dude.
     // This way designer can count enemies via switches and do many other interesting things.
     if (gModernMap && pSource->flags & kModernTypeFlag1) {
+        XSPRITE* pXSource = &xsprite[pSource->extra];
         switch (pSource->type) { // allow inheriting only for selected source types
             case kMarkerDudeSpawn:
                 //inherit pal?

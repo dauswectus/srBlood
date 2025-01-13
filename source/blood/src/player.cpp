@@ -404,6 +404,21 @@ int powerupCheck(PLAYER *pPlayer, int nPowerUp)
     return pPlayer->pwUpTime[nPowerUp];
 }
 
+char powerupAkimboWeapons(int nWeapon)
+{
+    switch (nWeapon)
+    {
+    case kWeaponFlare:
+    case kWeaponShotgun:
+    case kWeaponTommy:
+    case kWeaponNapalm:
+    case kWeaponTesla:
+        return 1;
+    default:
+        break;
+    }
+    return 0;
+}
 
 char powerupActivate(PLAYER *pPlayer, int nPowerUp)
 {
@@ -464,6 +479,8 @@ char powerupActivate(PLAYER *pPlayer, int nPowerUp)
             pPlayer->damageControl[kDamageBurn]++;
             break;
         case kItemTwoGuns:
+            if (!VanillaMode() && !powerupAkimboWeapons(pPlayer->curWeapon)) // if weapon doesn't have a akimbo state, don't raise weapon
+                break;
             pPlayer->input.newWeapon = pPlayer->curWeapon;
             WeaponRaise(pPlayer);
             break;
@@ -515,6 +532,8 @@ void powerupDeactivate(PLAYER *pPlayer, int nPowerUp)
             pPlayer->damageControl[kDamageBurn]--;
             break;
         case kItemTwoGuns:
+            if (!VanillaMode() && !powerupAkimboWeapons(pPlayer->curWeapon)) // if weapon doesn't have a akimbo state, don't raise weapon
+                break;
             pPlayer->input.newWeapon = pPlayer->curWeapon;
             WeaponRaise(pPlayer);
             break;
@@ -1996,10 +2015,12 @@ void playerProcess(PLAYER *pPlayer)
     pPlayer->painEffect = ClipLow(pPlayer->painEffect-kTicsPerFrame, 0);
     pPlayer->blindEffect = ClipLow(pPlayer->blindEffect-kTicsPerFrame, 0);
     pPlayer->pickupEffect = ClipLow(pPlayer->pickupEffect-kTicsPerFrame, 0);
-    if (pPlayer == gMe && gMe->pXSprite->health == 0)
-        pPlayer->hand = 0;
     if (!pXSprite->health)
+    {
+        if (!VanillaMode() || pPlayer == gMe)
+            pPlayer->hand = 0;
         return;
+    }
     pPlayer->isUnderwater = 0;
     if (pPlayer->posture == kPostureSwim)
     {

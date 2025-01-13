@@ -1327,6 +1327,59 @@ void viewDrawStats(PLAYER *pPlayer, int x, int y)
     }
 }
 
+#define kMaxBurnFlames 9
+
+const struct BURNTABLE {
+    short nTile;
+    unsigned char nStat;
+    unsigned char nPal;
+    int nScale;
+    short nX, nY;
+} gBurnTable[kMaxBurnFlames] = {
+    {2101, RS_AUTO, 0, 118784,  10, 220},
+    {2101, RS_AUTO, 0, 110592,  40, 220},
+    {2101, RS_AUTO, 0,  81920,  85, 220},
+    {2101, RS_AUTO, 0,  69632, 120, 220},
+    {2101, RS_AUTO, 0,  61440, 160, 220},
+    {2101, RS_AUTO, 0,  73728, 200, 220},
+    {2101, RS_AUTO, 0,  77824, 235, 220},
+    {2101, RS_AUTO, 0, 110592, 275, 220},
+    {2101, RS_AUTO, 0, 122880, 310, 220}
+};
+
+int gBurnTableAspectOffset[kMaxBurnFlames] = {0};
+
+void viewBurnTimeInit(void)
+{
+    if (!r_usenewaspect) return;
+
+    for (int i = 0; i < kMaxBurnFlames; i++)
+    {
+        int nX = gBurnTable[i].nX;
+        nX = scale(nX-(320>>1), 320>>1, 266>>1); // scale flame position
+        nX = scale(nX<<16, xscale, yscale); // multiply by window ratio
+        nX += (320>>1)<<16; // offset to center
+        gBurnTableAspectOffset[i] = nX;
+    }
+}
+
+void viewBurnTime(int gScale)
+{
+    if (!gScale) return;
+
+    for (int i = 0; i < kMaxBurnFlames; i++)
+    {
+        const BURNTABLE *pBurnTable = &gBurnTable[i];
+        const int nTile = gBurnTable[i].nTile+qanimateoffs(pBurnTable->nTile,32768+i);
+        int nScale = pBurnTable->nScale;
+        if (gScale < 600)
+            nScale = scale(nScale, gScale, 600);
+        const int nX = r_usenewaspect ? gBurnTableAspectOffset[i] : pBurnTable->nX<<16;
+        rotatesprite(nX, pBurnTable->nY<<16, nScale, 0, nTile,
+            0, pBurnTable->nPal, pBurnTable->nStat, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
+    }
+}
+
 #define kPowerUps 11
 
 const struct POWERUPDISPLAY {
@@ -1411,7 +1464,7 @@ void viewDrawPowerUps(PLAYER* pPlayer)
     static int gLastPageTimePowerupCount = 0;
     if (gViewMode == 3 && gViewSize > 3) // redraw borders
     {
-        if (gLastPageTimePowerup != gLevelTime && nSortCount || gLastPageTimePowerupCount != nSortCount)
+        if ((gLastPageTimePowerup != gLevelTime && nSortCount) || (gLastPageTimePowerupCount != nSortCount))
             viewUpdatePages();
     }
     gLastPageTimePowerup = gLevelTime;
@@ -2070,6 +2123,7 @@ void viewResizeView(int size)
         gGameMessageMgr.SetCoordinates(gViewX0S + 1, gViewY0S + nOffset);
     }
     viewSetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
+    viewBurnTimeInit();
     viewUpdatePages();
 }
 
@@ -2413,12 +2467,24 @@ tspritetype *viewAddEffect(int nTSprite, VIEW_EFFECT nViewEffect)
         pNSprite->z = getflorzofslope(pTSprite->sectnum, pNSprite->x, pNSprite->y);
         if (!VanillaMode()) // support better floor detection for shadows (detect fake floors/allows ROR traversal)
         {
-            int ceilZ, ceilHit, floorZ, floorHit;
-            GetZRangeAtXYZ(pTSprite->x, pTSprite->y, pTSprite->z, pTSprite->sectnum, &ceilZ, &ceilHit, &floorZ, &floorHit, pTSprite->clipdist<<2, CLIPMASK0, PARALLAXCLIP_CEILING|PARALLAXCLIP_FLOOR);
-            if (((floorHit&0xc000) == 0xc000) && spriRangeIsFine(floorHit&0x3fff) && ((sprite[floorHit&0x3fff].cstat & (CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_ALIGNMENT_FLOOR|CSTAT_SPRITE_INVISIBLE)) == (CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_ALIGNMENT_FLOOR))) // if there is a fake floor under us, use fake floor as the shadow position
+            char bHitFakeFloor = 0;
+            short nFakeFloorSprite;
+            if (spriRangeIsFine(pTSprite->owner) && !gMirrorDrawing) // don't attempt to check for fake floors if we're rendering a mirror due to getzrange mirrorsector crash
+            {
+                spritetype *pSprite = &sprite[pTSprite->owner];
+                int bakCstat = pSprite->cstat;
+                pSprite->cstat &= ~257;
+                int ceilZ, ceilHit, floorZ, floorHit;
+                GetZRangeAtXYZ(pSprite->x, pSprite->y, pSprite->z, pSprite->sectnum, &ceilZ, &ceilHit, &floorZ, &floorHit, pSprite->clipdist<<2, CLIPMASK0, PARALLAXCLIP_CEILING|PARALLAXCLIP_FLOOR);
+                nFakeFloorSprite = floorHit&0x3fff;
+                if ((floorHit&0xc000) == 0xc000)
+                    bHitFakeFloor = (sprite[nFakeFloorSprite].cstat & (CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_ALIGNMENT_FLOOR|CSTAT_SPRITE_INVISIBLE)) == (CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_ALIGNMENT_FLOOR);
+                pSprite->cstat = bakCstat;
+            }
+            if (bHitFakeFloor) // if there is a fake floor under us, use fake floor as the shadow position
             {
                 int top, bottom;
-                GetSpriteExtents(&sprite[floorHit&0x3fff], &top, &bottom);
+                GetSpriteExtents(&sprite[nFakeFloorSprite], &top, &bottom);
                 pNSprite->z = top;
                 pNSprite->z--; // offset from fake floor so it isn't z-fighting when being rendered
             }
@@ -2995,7 +3061,7 @@ void viewProcessSprites(int32_t cX, int32_t cY, int32_t cZ, int32_t cA, int32_t 
                 }
             }
             
-            if (nSprite != gView->pSprite->index || gViewPos != VIEWPOS_0) {
+            if (nSprite != gView->pSprite->index || gViewPos != VIEWPOS_0 || (gMirrorDrawing && !VanillaMode())) {
                 if (getflorzofslope(pTSprite->sectnum, pTSprite->x, pTSprite->y) >= cZ)
                 {
                     viewAddEffect(nTSprite, kViewEffectShadow);
@@ -3174,50 +3240,6 @@ void CalcPosition(spritetype *pSprite, int *pX, int *pY, int *pZ, int *vsectnum,
     dassert(*vsectnum >= 0 && *vsectnum < kMaxSectors);
     FindSector(*pX, *pY, *pZ, vsectnum);
     pSprite->cstat = bakCstat;
-}
-
-struct {
-    short nTile;
-    unsigned char nStat;
-    unsigned char nPal;
-    int nScale;
-    short nX, nY;
-} burnTable[9] = {
-     { 2101, RS_AUTO, 0, 118784, 10, 220 },
-     { 2101, RS_AUTO, 0, 110592, 40, 220 },
-     { 2101, RS_AUTO, 0, 81920, 85, 220 },
-     { 2101, RS_AUTO, 0, 69632, 120, 220 },
-     { 2101, RS_AUTO, 0, 61440, 160, 220 },
-     { 2101, RS_AUTO, 0, 73728, 200, 220 },
-     { 2101, RS_AUTO, 0, 77824, 235, 220 },
-     { 2101, RS_AUTO, 0, 110592, 275, 220 },
-     { 2101, RS_AUTO, 0, 122880, 310, 220 }
-};
-
-void viewBurnTime(int gScale)
-{
-    if (!gScale) return;
-
-    for (int i = 0; i < 9; i++)
-    {
-        const int nTile = burnTable[i].nTile+qanimateoffs(burnTable[i].nTile,32768+i);
-        int nScale = burnTable[i].nScale;
-        if (gScale < 600)
-        {
-            nScale = scale(nScale, gScale, 600);
-        }
-        int xoffset = burnTable[i].nX;
-        if (r_usenewaspect)
-        {
-            xoffset = scale(xoffset-(320>>1), 320>>1, 266>>1); // scale flame position
-            xoffset = scale(xoffset<<16, xscale, yscale); // multiply by window ratio
-            xoffset += (320>>1)<<16; // offset to center
-        }
-        else
-            xoffset <<= 16;
-        rotatesprite(xoffset, burnTable[i].nY<<16, nScale, 0, nTile,
-            0, burnTable[i].nPal, burnTable[i].nStat, windowxy1.x, windowxy1.y, windowxy2.x, windowxy2.y);
-    }
 }
 
 // by NoOne: show warning msgs in game instead of throwing errors (in some cases)
@@ -3662,7 +3684,6 @@ void viewDrawScreen(void)
                 tmp--;
             }
             PLAYER *pOther = &gPlayer[i];
-            //othercameraclock = gGameClock;
             if (!waloff[CRYSTALBALLBUFFER])
             {
                 tileAllocTile(CRYSTALBALLBUFFER, 128, 128, 0, 0);
@@ -3911,8 +3932,16 @@ RORHACK:
             {
                 rotatesprite(160<<16, defaultHoriz<<16, 65536, 0, kCrosshairTile, 0, g_isAlterDefaultCrosshair ? CROSSHAIR_PAL : 0, 2, gViewX0, gViewY0, gViewX1, gViewY1);
             }
-            cX = (v4c<<8)+(160<<16);
-            cY = (v48<<8)+(220<<16)+(zDelta<<9);
+            if (!VanillaMode()) // smooth motion
+            {
+                cX = (v4c<<8)+(160<<16);
+                cY = (v48<<8)+(220<<16)+(zDelta<<9);
+            }
+            else // quantize like vanilla v1.21
+            {
+                cX = ((v4c>>8)+160)<<16;
+                cY = ((v48>>8)+220+(zDelta>>7))<<16;
+            }
             int nShade = sector[nSectnum].floorshade; int nPalette = 0;
             if (sector[gView->pSprite->sectnum].extra > 0) {
                 sectortype *pSector = &sector[gView->pSprite->sectnum];
@@ -4011,17 +4040,10 @@ RORHACK:
         gViewMap.Process(cX, cY, nAng);
     }
     viewDrawInterface(delta);
-    int zn = ((gView->zWeapon-gView->zView-(12<<8))>>7)+220;
-    PLAYER *pPSprite = &gPlayer[gMe->pSprite->type-kDudePlayer1];
-    if (IsPlayerSprite(gMe->pSprite) && pPSprite->hand == 1)
+    if (IsPlayerSprite(gView->pSprite) && (gView->hand == 1))
     {
-        //static int lastClock;
+        int zn = ((gView->zWeapon-gView->zView-(12<<8))>>7)+220;
         gChoke.Draw(160, zn);
-        //if ((gGameClock % 5) == 0 && gGameClock != lastClock)
-        //{
-        //    gChoke.swayV(pPSprite);
-        //}
-        //lastClock = gGameClock;
     }
     if (byte_1A76C6)
     {

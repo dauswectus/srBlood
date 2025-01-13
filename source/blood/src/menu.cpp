@@ -66,6 +66,7 @@ void SetViewSwaying(CGameMenuItemZBool *);
 void SetMouseSensitivity(CGameMenuItemSliderFloat *);
 void SetMouseAimFlipped(CGameMenuItemZBool *);
 void SetTurnSpeed(CGameMenuItemSlider *);
+void SetTurnAcceleration(CGameMenuItemZCycle *);
 void ResetKeys(CGameMenuItemChain *);
 void ResetKeysClassic(CGameMenuItemChain *);
 void SetMessages(CGameMenuItemZBool *);
@@ -416,13 +417,14 @@ CGameMenu menuOptionsPlayer;
 CGameMenu menuOptionsControl;
 
 void SetupOptionsSound(CGameMenuItemChain *pItem);
+void SetupPollJoystick(CGameMenuItemChain *pItem);
 
 CGameMenuItemTitle itemOptionsTitle("OPTIONS", 1, 160, 20, 2038);
 CGameMenuItemChain itemOptionsChainGame("GAME SETUP", 1, 0, 50, 320, 1, &menuOptionsGame, -1, NULL, 0);
 CGameMenuItemChain itemOptionsChainDisplay("DISPLAY SETUP", 1, 0, 70, 320, 1, &menuOptionsDisplay, -1, NULL, 0);
 CGameMenuItemChain itemOptionsChainSound("SOUND SETUP", 1, 0, 90, 320, 1, &menuOptionsSound, -1, SetupOptionsSound, 0);
 CGameMenuItemChain itemOptionsChainPlayer("PLAYER SETUP", 1, 0, 110, 320, 1, &menuOptionsPlayer, -1, NULL, 0);
-CGameMenuItemChain itemOptionsChainControl("CONTROL SETUP", 1, 0, 130, 320, 1, &menuOptionsControl, -1, NULL, 0);
+CGameMenuItemChain itemOptionsChainControl("CONTROL SETUP", 1, 0, 130, 320, 1, &menuOptionsControl, -1, SetupPollJoystick, 0);
 CGameMenuItemChain itemOptionsChainOld("OLD MENU", 1, 0, 170, 320, 1, &menuOptionsOld, -1, NULL, 0);
 
 const char *pzAutoAimStrings[] = {
@@ -706,6 +708,12 @@ void SetJoystickDigitalNeg(CGameMenuItemZCycle* pItem);
 void SetJoystickDeadzone(CGameMenuItemSlider* pItem);
 void SetJoystickSaturate(CGameMenuItemSlider* pItem);
 
+const char *pzTurnAccelerationStrings[] = {
+    "OFF",
+    "ON RUNNING",
+    "ALWAYS ON",
+};
+
 CGameMenuItemTitle itemOptionsControlTitle("CONTROL SETUP", 1, 160, 20, 2038);
 CGameMenuItemChain itemOptionsControlKeyboard("KEYBOARD SETUP", 1, 0, 60, 320, 1, &menuOptionsControlKeyboard, -1, NULL, 0);
 CGameMenuItemChain itemOptionsControlMouse("MOUSE SETUP", 1, 0, 80, 320, 1, &menuOptionsControlMouse, -1, SetupMouseMenu, 0);
@@ -713,9 +721,11 @@ CGameMenuItemChain itemOptionsControlJoystickButtons("JOYSTICK BUTTONS SETUP", 1
 CGameMenuItemChain itemOptionsControlJoystickAxes("JOYSTICK AXES SETUP", 1, 0, 140, 320, 1, &menuOptionsControlJoystickListAxes, -1, SetupJoystickAxesMenu, 0);
 
 CGameMenuItemTitle itemOptionsControlKeyboardTitle("KEYBOARD SETUP", 1, 160, 20, 2038);
-CGameMenuItemChain itemOptionsControlKeyboardList("Configure Keys...", 1, 0, 60, 320, 1, &menuKeys, -1, NULL, 0);
-CGameMenuItemChain itemOptionsControlKeyboardReset("Reset Keys (default)...", 1, 0, 80, 320, 1, &menuKeys, -1, ResetKeys, 0);
-CGameMenuItemChain itemOptionsControlKeyboardResetClassic("Reset Keys (classic)...", 1, 0, 100, 320, 1, &menuKeys, -1, ResetKeysClassic, 0);
+CGameMenuItemSlider itemOptionsControlKeyboardSliderTurnSpeed("Key Turn Speed:", 1, 18, 50, 280, &gTurnSpeed, 64, 128, 4, SetTurnSpeed, -1, -1);
+CGameMenuItemZCycle itemOptionsControlKeyboardCycleTurnAcceleration("Key Turn Acceleration:", 1, 18, 70, 280, 0, SetTurnAcceleration, pzTurnAccelerationStrings, ARRAY_SIZE(pzTurnAccelerationStrings), 0);
+CGameMenuItemChain itemOptionsControlKeyboardList("Configure Keys...", 1, 0, 110, 320, 1, &menuKeys, -1, NULL, 0);
+CGameMenuItemChain itemOptionsControlKeyboardReset("Reset Keys (default)...", 1, 0, 135, 320, 1, &menuKeys, -1, ResetKeys, 0);
+CGameMenuItemChain itemOptionsControlKeyboardResetClassic("Reset Keys (classic)...", 1, 0, 155, 320, 1, &menuKeys, -1, ResetKeysClassic, 0);
 
 void SetMouseAimMode(CGameMenuItemZBool *pItem);
 void SetMouseVerticalAim(CGameMenuItemZBool *pItem);
@@ -856,7 +866,7 @@ void SetupMessagesMenu(void)
     menuMessages.Add(&itemBloodQAV, false);
 }
 
-void SetupControlsMenu(void)
+void SetupControlsOldMenu(void)
 {
     sliderMouseSpeed.fValue = ClipRangeF(CONTROL_MouseSensitivity, sliderMouseSpeed.fRangeLow, sliderMouseSpeed.fRangeHigh);
     sliderTurnSpeed.nValue = ClipRange(gTurnSpeed, sliderTurnSpeed.nRangeLow, sliderTurnSpeed.nRangeHigh);
@@ -1408,7 +1418,10 @@ void SetupOptionsMenu(void)
     menuOptionsPlayer.Add(&itemOptionsPlayerTitle, false);
     menuOptionsPlayer.Add(&itemOptionsPlayerName, true);
     menuOptionsPlayer.Add(&itemBloodQAV, false);
+}
 
+void SetupControlsMenu(void)
+{
     menuOptionsControl.Add(&itemOptionsControlTitle, false);
     menuOptionsControl.Add(&itemOptionsControlKeyboard, true);
     menuOptionsControl.Add(&itemOptionsControlMouse, false);
@@ -1417,10 +1430,15 @@ void SetupOptionsMenu(void)
     menuOptionsControl.Add(&itemBloodQAV, false);
 
     menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardTitle, false);
-    menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardList, true);
+    menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardSliderTurnSpeed, true);
+    menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardCycleTurnAcceleration, false);
+    menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardList, false);
     menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardReset, false);
     menuOptionsControlKeyboard.Add(&itemOptionsControlKeyboardResetClassic, false);
     menuOptionsControlKeyboard.Add(&itemBloodQAV, false);
+
+    itemOptionsControlKeyboardSliderTurnSpeed.nValue = gTurnSpeed;
+    itemOptionsControlKeyboardCycleTurnAcceleration.m_nFocus = gTurnAcceleration;
 
     menuOptionsControlMouse.Add(&itemOptionsControlMouseTitle, false);
     menuOptionsControlMouse.Add(&itemOptionsControlMouseButton, true);
@@ -1435,9 +1453,7 @@ void SetupOptionsMenu(void)
     itemOptionsControlMouseVerticalAim.pPreDrawCallback = PreDrawControlMouse;
 
     menuOptionsControlMouseButtonAssignment.Add(&itemOptionsControlMouseTitle, false);
-    int i;
-    int y = 60;
-    for (i = 0; i < MENUMOUSEFUNCTIONS; i++)
+    for (int i = 0, y = 60; i < MENUMOUSEFUNCTIONS; i++)
     {
         pItemOptionsControlMouseButton[i] = new CGameMenuItemZCycle(MenuMouseNames[i], 3, 66, y, 180, 0, SetMouseButton, pzGamefuncsStrings, NUMGAMEFUNCTIONS+1, 0, true);
         dassert(pItemOptionsControlMouseButton[i] != NULL);
@@ -1445,7 +1461,10 @@ void SetupOptionsMenu(void)
         y += 10;
     }
     menuOptionsControlMouseButtonAssignment.Add(&itemBloodQAV, false);
+}
 
+void SetupJoystickMenu(void)
+{
     if (!CONTROL_JoystickEnabled) // joystick disabled, don't bother populating joystick menus
     {
         itemOptionsControlJoystickButtons.bEnable = 0;
@@ -1453,7 +1472,7 @@ void SetupOptionsMenu(void)
         return;
     }
 
-    i = 0;
+    int i = 0, y = 0;
     for (int nButton = 0; nButton < joystick.numButtons; nButton++) // store every joystick button/hat name for button list at launch
     {
         const char *pzButtonName = joyGetName(1, nButton);
@@ -1602,7 +1621,7 @@ void SetupMenus(void)
     SetupLoadingScreen();
     SetupKeyListMenu();
     SetupMessagesMenu();
-    SetupControlsMenu();
+    SetupControlsOldMenu();
     SetupSaveGameMenu();
     SetupLoadGameMenu();
     SetupOptionsOldMenu();
@@ -1621,6 +1640,8 @@ void SetupMenus(void)
     SetupSorry3Menu();
 
     SetupOptionsMenu();
+    SetupControlsMenu();
+    SetupJoystickMenu();
     SetupNetworkMenu();
 }
 
@@ -1768,6 +1789,11 @@ void SetMouseAimFlipped(CGameMenuItemZBool *pItem)
 void SetTurnSpeed(CGameMenuItemSlider *pItem)
 {
     gTurnSpeed = pItem->nValue;
+}
+
+void SetTurnAcceleration(CGameMenuItemZCycle *pItem)
+{
+    gTurnAcceleration = pItem->m_nFocus;
 }
 
 void SetAutoAim(CGameMenuItemZCycle *pItem)
@@ -2263,6 +2289,17 @@ void SetupOptionsSound(CGameMenuItemChain *pItem)
     UpdateMusicDevice(NULL);
 }
 
+void SetupPollJoystick(CGameMenuItemChain *pItem)
+{
+    UNREFERENCED_PARAMETER(pItem);
+    if (CONTROL_JoyPresent && CONTROL_JoystickEnabled && !itemOptionsControlJoystickButtons.bEnable) // if joysticks menu was never initialized, and a controller is now detected, setup the menu
+    {
+        itemOptionsControlJoystickButtons.bEnable = 1;
+        itemOptionsControlJoystickAxes.bEnable = 1;
+        SetupJoystickMenu();
+    }
+}
+
 void UpdatePlayerName(CGameMenuItemZEdit *pItem, CGameMenuEvent *pEvent)
 {
     UNREFERENCED_PARAMETER(pItem);
@@ -2354,6 +2391,7 @@ void SetupJoystickAxesMenu(CGameMenuItemChain *pItem)
             pItemOptionsControlJoystickAxisAnalogue[nAxis]->m_nFocus = 0;
             break;
         }
+        pItemOptionsControlJoystickAxisAnalogueInvert[nAxis]->at20 = JoystickAnalogueInvert[nAxis];
         pItemOptionsControlJoystickAxisDigitalPos[nAxis]->m_nFocus = 0;
         for (int j = 0; j < NUMGAMEFUNCTIONS+1; j++)
         {
@@ -2741,14 +2779,20 @@ void LoadGame(CGameMenuItemZEditBitmap *pItem, CGameMenuEvent *event)
     int nSlot = pItem->at28;
     if (gGameOptions.nGameType != kGameTypeSinglePlayer)
         return;
+    int const bakpathsearchmode = pathsearchmode;
+    pathsearchmode = 1;
     G_ModDirSnprintf(strLoadGameName, BMAX_PATH, "game00%02d.sav", nSlot);
     if (!testkopen(strLoadGameName, 0))
+    {
+        pathsearchmode = bakpathsearchmode;
         return;
+    }
     viewLoadingScreen(gMenuPicnum, "Loading", "Loading Saved Game", strRestoreGameStrings[nSlot]);
     videoNextPage();
     LoadSave::LoadGame(strLoadGameName);
     gGameMenuMgr.Deactivate();
     gQuickLoadSlot = nSlot;
+    pathsearchmode = bakpathsearchmode;
 }
 
 void QuickLoadGame(void)
@@ -2756,13 +2800,19 @@ void QuickLoadGame(void)
     char strLoadGameName[BMAX_PATH];
     if (gGameOptions.nGameType != kGameTypeSinglePlayer)
         return;
+    int const bakpathsearchmode = pathsearchmode;
+    pathsearchmode = 1;
     G_ModDirSnprintf(strLoadGameName, BMAX_PATH, "game00%02d.sav", gQuickLoadSlot);
     if (!testkopen(strLoadGameName, 0))
+    {
+        pathsearchmode = bakpathsearchmode;
         return;
+    }
     //viewLoadingScreen(gMenuPicnum, "Loading", "Loading Saved Game", strRestoreGameStrings[gQuickLoadSlot]);
     videoNextPage();
     LoadSave::LoadGame(strLoadGameName);
     gGameMenuMgr.Deactivate();
+    pathsearchmode = bakpathsearchmode;
 }
 
 void ClearUserMapNameOnLevelChange(CGameMenuItemZCycle *pItem)
