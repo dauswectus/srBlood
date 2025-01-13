@@ -340,6 +340,18 @@ static int osdcmd_crosshaircolor(osdcmdptr_t parm)
     return OSDCMD_OK;
 }
 
+static int osdcmd_version(osdcmdptr_t UNUSED(parm))
+{
+    UNREFERENCED_CONST_PARAMETER(parm);
+    OSD_Printf("******************************************************\n");
+    OSD_Printf("*                     srBlood v06                    *\n");
+    OSD_Printf("*               NBlood version: r14134               *\n");
+    OSD_Printf("*                     2024.dec.09                    *\n");
+    OSD_Printf("*        https://github.com/dauswectus/srBlood       *\n");
+    OSD_Printf("******************************************************\n");
+    return OSDCMD_OK;
+}
+
 static int osdcmd_resetcrosshair(osdcmdptr_t UNUSED(parm))
 {
     UNREFERENCED_CONST_PARAMETER(parm);
@@ -1120,6 +1132,11 @@ int32_t registerosdcommands(void)
 //    OSD_RegisterFunction("cmenu","cmenu <#>: jumps to menu", osdcmd_cmenu);
     OSD_RegisterFunction("crosshaircolor","crosshaircolor: changes the crosshair color", osdcmd_crosshaircolor);
     OSD_RegisterFunction("crosshairreset", "crosshairreset: restores the original crosshair", osdcmd_resetcrosshair);
+
+    OSD_RegisterFunction("version", "crosshairreset: restores the original crosshair", osdcmd_version);
+
+    
+
 //
 //#if !defined NETCODE_DISABLE
 //    OSD_RegisterFunction("connect","connect: connects to a multiplayer game", osdcmd_connect);
