@@ -116,6 +116,7 @@ int32_t gFMPianoFix;
 
 //////////
 int gWeaponsV10x;
+int gVanilla;
 /////////
 
 int32_t CONFIG_FunctionNameToNum(const char *func)
@@ -408,6 +409,9 @@ void CONFIG_SetDefaults(void)
     gAutoAim = 1;
     gWeaponSwitch = 1;
 
+    gWeaponsV10x = 0;
+    gVanilla = 0;
+
     Bstrcpy(szPlayerName, "Player");
 
     Bstrcpy(CommbatMacro[0], "I love the smell of napalm...");
@@ -479,26 +483,26 @@ void CONFIG_SetDefaults(void)
 #else
     for (int i=0; i<MAXJOYBUTTONSANDHATS; i++)
     {
-        JoystickFunctions[i][0] = -1;
-        JoystickFunctions[i][1] = -1;
+        JoystickFunctions[i][0] = CONFIG_FunctionNameToNum(joystickdefaults[i]);
+        JoystickFunctions[i][1] = CONFIG_FunctionNameToNum(joystickclickeddefaults[i]);
         CONTROL_MapButton(JoystickFunctions[i][0], i, 0, controldevice_joystick);
         CONTROL_MapButton(JoystickFunctions[i][1], i, 1, controldevice_joystick);
     }
 
     for (int i=0; i<MAXJOYAXES; i++)
     {
-        JoystickAnalogueScale[i] = DEFAULTJOYSTICKANALOGUESCALE;
-        JoystickAnalogueDead[i] = DEFAULTJOYSTICKANALOGUEDEAD;
-        JoystickAnalogueSaturate[i] = DEFAULTJOYSTICKANALOGUESATURATE;
+        JoystickAnalogueScale[i] = joystickanalogscaledefaults[i];
+        JoystickAnalogueDead[i] = joystickanalogdeaddefaults[i];
+        JoystickAnalogueSaturate[i] = joystickanalogsaturatedefaults[i];
         CONTROL_SetAnalogAxisScale(i, JoystickAnalogueScale[i], controldevice_joystick);
         JOYSTICK_SetDeadZone(i, JoystickAnalogueDead[i], JoystickAnalogueSaturate[i]);
 
-        JoystickDigitalFunctions[i][0] = -1;
-        JoystickDigitalFunctions[i][1] = -1;
+        JoystickDigitalFunctions[i][0] = CONFIG_FunctionNameToNum(joystickdigitaldefaults[i*2]);
+        JoystickDigitalFunctions[i][1] = CONFIG_FunctionNameToNum(joystickdigitaldefaults[i*2+1]);
         CONTROL_MapDigitalAxis(i, JoystickDigitalFunctions[i][0], 0);
         CONTROL_MapDigitalAxis(i, JoystickDigitalFunctions[i][1], 1);
 
-        JoystickAnalogueAxes[i] = -1;
+        JoystickAnalogueAxes[i] = CONFIG_AnalogNameToNum(joystickanalogdefaults[i]);
         CONTROL_MapAnalogAxis(i, JoystickAnalogueAxes[i]);
 
         JoystickAnalogueInvert[i] = 0;
@@ -718,6 +722,7 @@ int CONFIG_ReadSetup(void)
     // Nuke: make cvar
     ///////
     SCRIPT_GetNumber(scripthandle, "Game Options", "WeaponsV10x", &gWeaponsV10x);
+    SCRIPT_GetNumber(scripthandle, "Game Options", "VanillaMode", &gVanilla);
     ///////
 
     char commmacro[] = "CommbatMacro# ";
@@ -743,6 +748,8 @@ int CONFIG_ReadSetup(void)
     SCRIPT_GetNumber(scripthandle, "Setup", "ConfigVersion", &configversion);
     SCRIPT_GetNumber(scripthandle, "Setup", "ForceSetup", &gSetup.forcesetup);
     SCRIPT_GetNumber(scripthandle, "Setup", "NoAutoLoad", &gSetup.noautoload);
+    SCRIPT_GetNumber(scripthandle, "Setup", "InputJoystick", &gSetup.usejoystick);
+    SCRIPT_GetNumber(scripthandle, "Setup", "InputMouse", &gSetup.usemouse);
 
     int32_t cachesize;
     SCRIPT_GetNumber(scripthandle, "Setup", "CacheSize", &cachesize);
@@ -876,6 +883,8 @@ void CONFIG_WriteSetup(uint32_t flags)
     SCRIPT_PutNumber(scripthandle, "Setup", "ConfigVersion", BYTEVERSION, FALSE, FALSE);
     SCRIPT_PutNumber(scripthandle, "Setup", "ForceSetup", gSetup.forcesetup, FALSE, FALSE);
     SCRIPT_PutNumber(scripthandle, "Setup", "NoAutoLoad", gSetup.noautoload, FALSE, FALSE);
+    SCRIPT_PutNumber(scripthandle, "Setup", "InputJoystick", gSetup.usejoystick, FALSE, FALSE);
+    SCRIPT_PutNumber(scripthandle, "Setup", "InputMouse", gSetup.usemouse, FALSE, FALSE);
 
 #ifdef POLYMER
     SCRIPT_PutNumber(scripthandle, "Screen Setup", "Polymer", glrendmode == REND_POLYMER, FALSE, FALSE);
@@ -991,6 +1000,7 @@ void CONFIG_WriteSetup(uint32_t flags)
 
     ///////
     SCRIPT_PutNumber(scripthandle, "Game Options", "WeaponsV10x", gWeaponsV10x, FALSE, FALSE);
+    SCRIPT_PutNumber(scripthandle, "Game Options", "VanillaMode", gVanilla, FALSE, FALSE);
     ///////
     
     SCRIPT_Save(scripthandle, SetupFilename);

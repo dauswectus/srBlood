@@ -89,7 +89,7 @@ enum rendmode_t {
 
 //define NEW_MAP_FORMAT
 
-#define MAXWALLSB ((MAXWALLS>>2)+(MAXWALLS>>3))
+#define MAXWALLSB (MAXWALLS>>1)
 
 #define MAXTILES 30720
 #define MAXUSERTILES (MAXTILES-256)  // reserve 256 tiles at the end
@@ -1259,6 +1259,7 @@ void    artConvertRGB(palette_t *pic, uint8_t const *buf, int32_t bufsizx, int32
 void    tileUpdatePicSiz(int32_t picnum);
 
 int32_t   qloadkvx(int32_t voxindex, const char *filename);
+void vox_clearid(int32_t const);
 void vox_undefine(int32_t const);
 intptr_t   tileCreate(int16_t tilenume, int32_t xsiz, int32_t ysiz);
 void   tileCopySection(int32_t tilenume1, int32_t sx1, int32_t sy1, int32_t xsiz, int32_t ysiz, int32_t tilenume2, int32_t sx2, int32_t sy2);

@@ -848,6 +848,13 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
         || (pPlayer->timebeforeexit > 0 && pPlayer->timebeforeexit <= GAMETICSPERSEC * 3))
         return -1;
 
+    // Duke-Tag sound
+    if ((snd->flags & (SF_DTAG|SF_GLOBAL)) == SF_DTAG)
+    {
+        S_PlaySound(sndNum);
+        return 0;
+    }
+
     // Duke talk
     if (snd->flags & SF_TALK)
     {
@@ -859,27 +866,6 @@ int S_PlaySound3D(int num, int spriteNum, const vec3_t& pos)
         // don't play if any Duke talk sounds are already playing
         else if (g_dukeTalk || !(ud.config.VoiceToggle & 1))
             return -1;
-    }
-    else if ((snd->flags & (SF_DTAG|SF_GLOBAL)) == SF_DTAG)  // Duke-Tag sound
-    {
-        int const voice = S_PlaySound(sndNum);
-
-        if (voice <= FX_Ok)
-            return -1;
-
-        int slot = 0;
-        while (slot < MAXSOUNDINSTANCES && snd->voices[slot].handle != voice)
-            slot++;
-
-        if (/*EDUKE32_PREDICT_FALSE*/(slot >= MAXSOUNDINSTANCES))
-        {
-            LOG_F(WARNING, "S_PlaySound3D: slot >= MAXSOUNDINSTANCES!");
-            return -1;
-        }
-
-        snd->voices[slot].owner = spriteNum;
-
-        return voice;
     }
 
     int32_t    sndist, sndang;
@@ -942,7 +928,7 @@ error:
     if (snd->flags & SF_TALK)
         g_dukeTalk = true;
 
-    float const volume = ((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? snd->volume * ((float)ud.config.VoiceVolume / 255.f) : snd->volume * ((float)ud.config.FXVolume / 255.f);
+    fix16_t const volume = fix16_from_float(((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? fix16_to_float(snd->volume) * ((float)ud.config.VoiceVolume / 255.f) : fix16_to_float(snd->volume) * ((float)ud.config.FXVolume / 255.f));
     int const voice = FX_Play3D(snd->ptr, snd->len, repeatp ? FX_LOOP : FX_ONESHOT, pitch, sndang >> 4, sndist >> 6, snd->priority,
                                 volume, (sndNum * MAXSOUNDINSTANCES) + sndSlot);
 
@@ -999,7 +985,7 @@ error:
     if (snd->flags & SF_TALK)
         g_dukeTalk = true;
 
-    float const volume = ((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? snd->volume * ((float)ud.config.VoiceVolume / 255.f) : snd->volume * ((float)ud.config.FXVolume / 255.f);
+    fix16_t const volume = fix16_from_float(((snd->flags & SF_TALK) || ((snd->flags & SF_SPEECH) && ud.config.VoiceVolume > ud.config.FXVolume)) ? fix16_to_float(snd->volume) * ((float)ud.config.VoiceVolume / 255.f) : fix16_to_float(snd->volume) * ((float)ud.config.FXVolume / 255.f));
     int const voice = (snd->flags & SF_LOOP) ? FX_Play(snd->ptr, snd->len, 0, -1, pitch, LOUDESTVOLUME, LOUDESTVOLUME,
                                                   LOUDESTVOLUME, snd->len, volume, (num * MAXSOUNDINSTANCES) + sndnum)
                                         : FX_Play3D(snd->ptr, snd->len, FX_ONESHOT, pitch, 0, 255 - LOUDESTVOLUME, snd->priority, volume,

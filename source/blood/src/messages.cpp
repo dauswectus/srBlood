@@ -302,6 +302,9 @@ void LevelWarpAndRecord(int nEpisode, int nLevel)
     strcpy(buffer, levelGetFilename(nEpisode, nLevel));
     ChangeExtension(buffer, ".DEM");
     gDemo.Create(buffer);
+    gGameOptions.nDifficultyQuantity = gGameOptions.nDifficulty;
+    gGameOptions.nDifficultyHealth = gGameOptions.nDifficulty;
+    gSkill = gGameOptions.nDifficulty;
     StartLevel(&gGameOptions);
     viewResizeView(gViewSize);
 }
@@ -421,7 +424,7 @@ void CGameMessageMgr::Display(void)
 
             int shade = ClipHigh(messagesToDisplayCount*8, 48);
             int x = gViewMode == 3 ? gViewX0S : 0;
-            int y = (gViewMode == 3 ? this->y : 0) + (int)at9;
+            int y = this->y + (int)at9;
             for (int i = 0; i < messagesToDisplayCount; i++)
             {
                 messageStruct* pMessage = messagesToDisplay[i];
@@ -447,17 +450,16 @@ void CGameMessageMgr::Display(void)
 
 void CGameMessageMgr::Clear(void)
 {
+    messagesIndex = nextMessagesIndex = numberOfDisplayedMessages = 0;
+#if 0 // we have the CPU cycles with current-day hardware to delete every message now, don't use this old method
     if (VanillaMode())
+        return;
+#endif
+    for (int i = 0; i < kMessageLogSize; i++)
     {
-        messagesIndex = nextMessagesIndex = numberOfDisplayedMessages = 0;
-    }
-    else
-    {
-        for (int i = 0; i < kMessageLogSize; i++)
-        {
-            messageStruct* pMessage = &messages[i];
-            pMessage->deleted = true;
-        }
+        messageStruct* pMessage = &messages[i];
+        pMessage->deleted = true;
+        pMessage->lastTickWhenVisible = 0;
     }
 }
 
@@ -573,7 +575,7 @@ void CPlayerMsg::Send(void)
     if (VanillaMode() || !IsWhitespaceOnly(text))
     {
         netBroadcastMessage(myconnectindex, text);
-        if (!VanillaMode())
+        if (!VanillaMode() && (gGameOptions.nGameType != kGameTypeSinglePlayer))
         {
             char *myName = gProfile[myconnectindex].name;
             char szTemp[128];

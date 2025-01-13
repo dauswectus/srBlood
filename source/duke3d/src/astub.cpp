@@ -3894,7 +3894,7 @@ static void TextEntryMode(int16_t startspr)
         return;
     }
 
-    if ((sprite[startspr].cstat&16) == 0)
+    if ((sprite[startspr].cstat & CSTAT_SPRITE_ALIGNMENT) != CSTAT_SPRITE_ALIGNMENT_WALL)
     {
         message("Must point at a wall-aligned text sprite.");
         return;
@@ -10077,10 +10077,18 @@ static void m32script_interrupt_handler(int signo)
     }
 }
 
-static void M32_HandleMemErr(int32_t line, const char *file, const char *func)
+static void M32_HandleMemErr(int32_t bytes, int32_t lineNum, const char *fileName, const char *funcName)
 {
-    LOG_F(ERROR, "Out of memory in %s:%d (%s)", file, line, func);
-    osdcmd_quit(NULL);
+#ifdef DEBUGGINGAIDS
+    debug_break();
+    Bsprintf(tempbuf, "Out of memory: failed allocating %d bytes at %s:%d (%s)!", bytes, fileName, lineNum, funcName);
+#else
+    UNREFERENCED_PARAMETER(lineNum);
+    UNREFERENCED_PARAMETER(fileName);
+    UNREFERENCED_PARAMETER(funcName);
+    Bsprintf(tempbuf, "Out of memory: failed allocating %d bytes!", bytes);
+#endif
+    fatal_exit(tempbuf);
 }
 
 int32_t ExtInit(void)
@@ -10607,7 +10615,7 @@ void ExtAnalyzeSprites(int32_t ourx, int32_t oury, int32_t ourz, int32_t oura, i
             if (tspr->sectnum<0)
                 continue;
 
-            const int32_t wallaligned = (tspr->cstat & CSTAT_SPRITE_ALIGNMENT_WALL);
+            const int32_t wallaligned = (tspr->cstat & CSTAT_SPRITE_ALIGNMENT) == CSTAT_SPRITE_ALIGNMENT_WALL;
             const int32_t fpal = sector[tspr->sectnum].floorpal;
 
             // 1st rule

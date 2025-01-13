@@ -51,6 +51,8 @@ void ReadGameOptionsLegacy(GAMEOPTIONS &gameOptions, GAMEOPTIONSLEGACY &gameOpti
 {
     gameOptions.nGameType = gameOptionsLegacy.nGameType;
     gameOptions.nDifficulty = gameOptionsLegacy.nDifficulty;
+    gameOptions.nDifficultyQuantity = gameOptionsLegacy.nDifficulty;
+    gameOptions.nDifficultyHealth = gameOptionsLegacy.nDifficulty;
     gameOptions.nEpisode = gameOptionsLegacy.nEpisode;
     gameOptions.nLevel = gameOptionsLegacy.nLevel;
     strcpy(gameOptions.zLevelName, gameOptionsLegacy.zLevelName);
@@ -234,6 +236,7 @@ void CDemo::Close(void)
     }
     at0 = 0;
     at1 = 0;
+    m_bLegacy = false;
 }
 
 bool CDemo::SetupPlayback(const char *pzFile)
@@ -391,6 +394,8 @@ _DEMOPLAYBACK:
                 gNetFifoTail = 0;
                 //memcpy(connectpoint2, aimHeight.connectPoints, sizeof(aimHeight.connectPoints));
                 memcpy(&gGameOptions, &m_gameOptions, sizeof(GAMEOPTIONS));
+                gGameOptions.nDifficultyQuantity = gGameOptions.nDifficulty;
+                gGameOptions.nDifficultyHealth = gGameOptions.nDifficulty;
                 gSkill = gGameOptions.nDifficulty;
                 for (int i = 0; i < 8; i++)
                     playerInit(i, 0);
@@ -440,7 +445,7 @@ _DEMOPLAYBACK:
                     }
                 }
             }
-            gNetFifoClock += 4;
+            gNetFifoClock += kTicsPerFrame;
             if (!gQuitGame)
                 ProcessFrame();
             ready2send = 0;
@@ -507,6 +512,11 @@ void CDemo::LoadDemoInfo(void)
     klistfree(pList);
     pathsearchmode = opsm;
     pCurrentDemo = pFirstDemo;
+}
+
+bool CDemo::VanillaDemo(void)
+{
+    return at1 && m_bLegacy;
 }
 
 void CDemo::NextDemo(void)

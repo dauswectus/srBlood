@@ -30,7 +30,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "android.h"
 #endif
 
-int32_t lastvisinc;
 hudweapon_t hudweap;
 
 #ifdef SPLITSCREEN_MOD_HACKS
@@ -3011,7 +3010,6 @@ enddisplayweapon:;
 #define MAXHORIZVEL   256
 
 int32_t g_myAimMode, g_myAimStat, g_oldAimStat;
-int32_t mouseyaxismode = -1;
 uint64_t g_lastInputTicks;
 
 enum inputlock_t
@@ -3176,6 +3174,9 @@ void P_UpdateAngles(int const playerNum, input_t &input)
 
     pPlayer->q16horiz    = fix16_clamp(pPlayer->q16horiz, F16(HORIZ_MIN), F16(HORIZ_MAX));
     pPlayer->q16horizoff = fix16_clamp(pPlayer->q16horizoff, F16(HORIZ_MIN), F16(HORIZ_MAX));
+
+    if (pPlayer->newowner == -1)
+        sprite[pPlayer->i].ang = fix16_to_int(pPlayer->q16ang);
 
     if (VM_HaveEvent(EVENT_POSTUPDATEANGLES))
     {
@@ -4562,10 +4563,7 @@ static void P_ProcessWeapon(int playerNum)
                 if (PWEAPON(playerNum, pPlayer->curr_weapon, Shoots) != 0)
                 {
                     if (!(PWEAPON(playerNum, pPlayer->curr_weapon, Flags) & WEAPON_NOVISIBLE))
-                    {
-                        lastvisinc = (int32_t) totalclock+32;
                         pPlayer->visibility = 0;
-                    }
 
                     P_SetWeaponGamevars(playerNum, pPlayer);
                     A_Shoot(pPlayer->i, PWEAPON(playerNum, pPlayer->curr_weapon, Shoots));
@@ -5078,7 +5076,7 @@ void P_ProcessInput(int playerNum)
 
         int32_t cz[4], fz[4], hzhit[4], lzhit[4];
         vec3_t pos[4] = { pPlayer->pos, pPlayer->pos, pPlayer->pos, pPlayer->pos };
-        
+
         int const thirdStep = pPlayer->autostep_sbw / 3;
 
         pos[0].z += pPlayer->autostep_sbw;

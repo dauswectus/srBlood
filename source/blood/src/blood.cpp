@@ -127,6 +127,8 @@ bool gSaveGameActive;
 int gCacheMiss;
 int gMenuPicnum = 2518; // default menu picnum
 
+bool bVanilla = 0;
+
 enum gametokens
 {
     T_INCLUDE = 0,
@@ -221,7 +223,9 @@ void PrecacheDude(spritetype *pSprite)
     switch (pSprite->type)
     {
     case kDudeCultistTommy:
+    case kDudeCultistTommyProne:
     case kDudeCultistShotgun:
+    case kDudeCultistShotgunProne:
     case kDudeCultistTesla:
     case kDudeCultistTNT:
         seqPrecacheId(pDudeInfo->seqStartID+6);
@@ -597,6 +601,7 @@ void StartLevel(GAMEOPTIONS *gameOptions)
     if (gDemo.at0 && gGameStarted)
         gDemo.Close();
     netWaitForEveryone(0);
+    VanillaModeUpdate();
     if (gGameOptions.nGameType == kGameTypeSinglePlayer)
     {
         if (!(gGameOptions.uGameFlags&kGameFlagContinuing))
@@ -617,6 +622,8 @@ void StartLevel(GAMEOPTIONS *gameOptions)
         gGameOptions.nLevel = gPacketStartGame.levelId;
         gGameOptions.nGameType = gPacketStartGame.gameType;
         gGameOptions.nDifficulty = gPacketStartGame.difficulty;
+        gGameOptions.nDifficultyQuantity = gPacketStartGame.difficulty;
+        gGameOptions.nDifficultyHealth = gPacketStartGame.difficulty;
         gGameOptions.nMonsterSettings = gPacketStartGame.monsterSettings;
         gGameOptions.nWeaponSettings = gPacketStartGame.weaponSettings;
         gGameOptions.nItemSettings = gPacketStartGame.itemSettings;
@@ -647,7 +654,6 @@ void StartLevel(GAMEOPTIONS *gameOptions)
             gHealthTemp[i] = xsprite[gPlayer[i].pSprite->extra].health;
         }
     }
-    bVanilla = gDemo.at1 && gDemo.m_bLegacy;
     drawLoadingScreen();
     if (dbLoadMap(gameOptions->zLevelName,(int*)&startpos.x,(int*)&startpos.y,(int*)&startpos.z,&startang,&startsectnum,(unsigned int*)&gameOptions->uMapCRC))
     {
@@ -669,7 +675,7 @@ void StartLevel(GAMEOPTIONS *gameOptions)
         if (pSprite->statnum < kMaxStatus && pSprite->extra > 0) {
             
             XSPRITE *pXSprite = &xsprite[pSprite->extra];
-            if ((pXSprite->lSkill & (1 << gameOptions->nDifficulty)) || (pXSprite->lS && gameOptions->nGameType == kGameTypeSinglePlayer)
+            if ((pXSprite->lSkill & (1 << gameOptions->nDifficultyQuantity)) || (pXSprite->lS && gameOptions->nGameType == kGameTypeSinglePlayer)
                 || (pXSprite->lB && gameOptions->nGameType == kGameTypeBloodBath) || (pXSprite->lT && gameOptions->nGameType == kGameTypeTeams)
                 || (pXSprite->lC && gameOptions->nGameType == kGameTypeCoop)) {
                 
@@ -779,7 +785,7 @@ void StartLevel(GAMEOPTIONS *gameOptions)
     if (!gDemo.at1)
         gGameMenuMgr.Deactivate();
     levelTryPlayMusicOrNothing(gGameOptions.nEpisode, gGameOptions.nLevel);
-    // viewSetMessage("");
+    viewSetMessage("");
     viewSetErrorMessage("");
     viewResizeView(gViewSize);
     if ((gGameOptions.nGameType == kGameTypeTeams) && VanillaMode())
@@ -989,12 +995,15 @@ void StartNetworkLevel(void)
 {
     if (gDemo.at0)
         gDemo.Close();
+    VanillaModeUpdate();
     if (!(gGameOptions.uGameFlags&kGameFlagContinuing))
     {
         gGameOptions.nEpisode = gPacketStartGame.episodeId;
         gGameOptions.nLevel = gPacketStartGame.levelId;
         gGameOptions.nGameType = gPacketStartGame.gameType;
         gGameOptions.nDifficulty = gPacketStartGame.difficulty;
+        gGameOptions.nDifficultyQuantity = gPacketStartGame.difficulty;
+        gGameOptions.nDifficultyHealth = gPacketStartGame.difficulty;
         gGameOptions.nMonsterSettings = gPacketStartGame.monsterSettings;
         gGameOptions.nWeaponSettings = gPacketStartGame.weaponSettings;
         gGameOptions.nItemSettings = gPacketStartGame.itemSettings;
@@ -1085,6 +1094,8 @@ void LocalKeys(void)
     if (gDoQuickSave)
     {
         keyFlushScans();
+        CONTROL_ClearButton(gamefunc_Quick_Save);
+        CONTROL_ClearButton(gamefunc_Quick_Load);
         switch (gDoQuickSave)
         {
         case 1:
@@ -1096,6 +1107,20 @@ void LocalKeys(void)
         }
         gDoQuickSave = 0;
         return;
+    }
+    if (BUTTON(gamefunc_Quick_Save))
+    {
+        keyFlushScans();
+        CONTROL_ClearButton(gamefunc_Quick_Save);
+        if (gGameOptions.nGameType == kGameTypeSinglePlayer)
+            return DoQuickSave();
+    }
+    if (BUTTON(gamefunc_Quick_Load))
+    {
+        keyFlushScans();
+        CONTROL_ClearButton(gamefunc_Quick_Load);
+        if (gGameOptions.nGameType == kGameTypeSinglePlayer)
+            return DoQuickLoad();
     }
     char key;
     if ((key = keyGetScan()) != 0)
@@ -1167,6 +1192,7 @@ void LocalKeys(void)
             return;
         case sc_F6:
             keyFlushScans();
+            CONTROL_ClearButton(gamefunc_Quick_Save);
             if (gGameOptions.nGameType == kGameTypeSinglePlayer)
                 DoQuickSave();
             break;
@@ -1177,6 +1203,7 @@ void LocalKeys(void)
             return;
         case sc_F9:
             keyFlushScans();
+            CONTROL_ClearButton(gamefunc_Quick_Load);
             if (gGameOptions.nGameType == kGameTypeSinglePlayer)
                 DoQuickLoad();
             break;
@@ -1221,6 +1248,7 @@ bool endMultiEpisode = false;
 void ProcessFrame(void)
 {
     char buffer[128];
+    VanillaModeUpdate();
     for (int i = connecthead; i >= 0; i = connectpoint2[i])
     {
         gPlayer[i].input.buttonFlags = gFifoInput[gNetFifoTail&255][i].buttonFlags;
@@ -1418,6 +1446,7 @@ SWITCH switches[] = {
     { "c", 43, 1 },
     { "conf", 43, 1 },
     { "noconsole", 43, 0 },
+    { "s", 44, 1 },
     { NULL, 0, 0 }
 };
 
@@ -1446,6 +1475,7 @@ void PrintHelp(void)
         "-pname\t\tOverride player name setting from config file\n"
         "-record\t\tRecord demo\n"
         "-rff\t\tSpecify an RFF file for Blood game resources\n"
+        "-s\t\tStart game on difficulty level; Range:0..4; Default:2;\n\n"
         "-server [players]\tStart a multiplayer server\n"
 #ifdef STARTUP_SETUP_WINDOW
         "-setup/nosetup\tEnable or disable startup window\n"
@@ -1634,11 +1664,7 @@ void ParseOptions(void)
         case 10:
             if (OptArgc < 1)
                 ThrowError("Missing argument");
-            gSkill = strtoul(OptArgv[0], NULL, 0);
-            if (gSkill < 0)
-                gSkill = 0;
-            else if (gSkill > 4)
-                gSkill = 4;
+            gSkill = ClipRange(strtoul(OptArgv[0], NULL, 0), 0, 4);
             break;
         case 15:
             break;
@@ -1731,6 +1757,14 @@ void ParseOptions(void)
             G_AddPath(OptArgv[0]);
             break;
         case 43: // conf, noconsole
+            break;
+        case 44:
+            if (OptArgc < 1)
+                ThrowError("Missing argument");
+            gSkill = ClipRange(strtoul(OptArgv[0], NULL, 0), 0, 4);
+            gGameOptions.nDifficulty = gSkill;
+            gGameOptions.nDifficultyQuantity = gSkill;
+            gGameOptions.nDifficultyHealth = gSkill;
             break;
         }
     }
@@ -1873,8 +1907,13 @@ int app_main(int argc, char const * const * argv)
 
     G_LoadGroups(!bNoAutoLoad && !gSetup.noautoload);
 
-    //if (!g_useCwd)
-    //    G_CleanupSearchPaths();
+    if (!g_useCwd)
+    {
+        G_CleanupSearchPaths();
+
+        if (pINISelected && strcmp(pINISelected->zName, "CRYPTIC.INI"))
+            removesearchpaths_withuser(SEARCHPATH_CRYPTIC);
+    }
 
     LOG_F(INFO, "Initializing OSD...");
 
@@ -1992,6 +2031,7 @@ int app_main(int argc, char const * const * argv)
     netInitialize(true);
     scrSetGameMode(gSetup.fullscreen, gSetup.xdim, gSetup.ydim, gSetup.bpp);
     scrSetGamma(gGamma);
+    gGameMessageMgr.SetState(gMessageState);
     viewResizeView(gViewSize);
     vsync = videoSetVsync(vsync);
     LOG_F(INFO, "Initializing sound system");
@@ -2035,6 +2075,7 @@ RESTART:
     viewSetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
     gQuitGame = 0;
     gRestartGame = 0;
+    VanillaModeUpdate();
     if (gGameOptions.nGameType != kGameTypeSinglePlayer)
     {
         KB_ClearKeysDown();
@@ -2199,6 +2240,7 @@ RESTART:
         gQuitRequest = 0;
         gRestartGame = 0;
         gGameStarted = 0;
+        VanillaModeUpdate();
         levelSetupOptions(0,0);
         while (gGameMenuMgr.m_bActive)
         {
@@ -2965,12 +3007,8 @@ void LoadExtraArts(void)
     }
 }
 
-bool DemoRecordStatus(void) {
-    return gDemo.at0;
-}
-
-bool VanillaMode() {
-    return gDemo.m_bLegacy && gDemo.at1;
+void VanillaModeUpdate(void) {
+    bVanilla = gDemo.VanillaDemo() || (gVanilla && !gDemo.at0 && gGameOptions.nGameType == kGameTypeSinglePlayer && numplayers == 1);
 }
 
 bool fileExistsRFF(int id, const char *ext) {

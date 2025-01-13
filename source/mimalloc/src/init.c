@@ -14,22 +14,29 @@ terms of the MIT license. A copy of the license can be found in the file
 
 // Empty page used to initialize the small free pages array
 const mi_page_t _mi_page_empty = {
-  0, false, false, false,
+  0,
+  false, false, false, false,
   0,       // capacity
   0,       // reserved capacity
   { 0 },   // flags
   false,   // is_zero
   0,       // retire_expire
   NULL,    // free
-  0,       // used
-  0,       // xblock_size
   NULL,    // local_free
+  0,       // used
+  0,       // block size shift
+  0,       // heap tag
+  0,       // block_size
+  NULL,    // page_start
   #if (MI_PADDING || MI_ENCODE_FREELIST)
   { 0, 0 },
   #endif
   MI_ATOMIC_VAR_INIT(0), // xthread_free
   MI_ATOMIC_VAR_INIT(0), // xheap
   NULL, NULL
+  #if MI_INTPTR_SIZE==4 
+  , { NULL }
+  #endif
 };
 
 #define MI_PAGE_EMPTY() ((mi_page_t*)&_mi_page_empty)
@@ -78,7 +85,8 @@ const mi_page_t _mi_page_empty = {
   MI_STAT_COUNT_NULL(), MI_STAT_COUNT_NULL(), \
   MI_STAT_COUNT_NULL(), \
   { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
-  { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } \
+  { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 }, \
+  { 0, 0 }, { 0, 0 }, { 0, 0 }, { 0, 0 } \
   MI_STAT_COUNT_END_NULL()
 
 // --------------------------------------------------------
@@ -92,8 +100,6 @@ const mi_page_t _mi_page_empty = {
 
 mi_decl_cache_align const mi_heap_t _mi_heap_empty = {
   NULL,
-  MI_SMALL_PAGES_EMPTY,
-  MI_PAGE_QUEUES_EMPTY,
   MI_ATOMIC_VAR_INIT(NULL),
   0,                // tid
   0,                // cookie
@@ -103,7 +109,10 @@ mi_decl_cache_align const mi_heap_t _mi_heap_empty = {
   0,                // page count
   MI_BIN_FULL, 0,   // page retired min/max
   NULL,             // next
-  false
+  false,            // can reclaim
+  0,                // tag
+  MI_SMALL_PAGES_EMPTY,
+  MI_PAGE_QUEUES_EMPTY
 };
 
 
@@ -120,7 +129,7 @@ static mi_tld_t tld_main = {
   0, false,
   &_mi_heap_main, &_mi_heap_main,
   { { NULL, NULL }, {NULL ,NULL}, {NULL ,NULL, 0},
-    0, 0, 0, 0,
+    0, 0, 0, 0, 0,
     &tld_main.stats, &tld_main.os
   }, // segments
   { 0, &tld_main.stats },  // os
@@ -129,8 +138,6 @@ static mi_tld_t tld_main = {
 
 mi_heap_t _mi_heap_main = {
   &tld_main,
-  MI_SMALL_PAGES_EMPTY,
-  MI_PAGE_QUEUES_EMPTY,
   MI_ATOMIC_VAR_INIT(NULL),
   0,                // thread id
   0,                // initial cookie
@@ -140,7 +147,10 @@ mi_heap_t _mi_heap_main = {
   0,                // page count
   MI_BIN_FULL, 0,   // page retired min/max
   NULL,             // next heap
-  false             // can reclaim
+  false,            // can reclaim
+  0,                // tag
+  MI_SMALL_PAGES_EMPTY,
+  MI_PAGE_QUEUES_EMPTY
 };
 
 bool _mi_process_is_initialized = false;  // set to `true` in `mi_process_init`.
@@ -175,9 +185,9 @@ mi_heap_t* _mi_heap_main_get(void) {
 
 // note: in x64 in release build `sizeof(mi_thread_data_t)` is under 4KiB (= OS page size).
 typedef struct mi_thread_data_s {
-  mi_heap_t  heap;  // must come first due to cast in `_mi_heap_done`
+  mi_heap_t  heap;   // must come first due to cast in `_mi_heap_done`
   mi_tld_t   tld;
-  mi_memid_t memid;
+  mi_memid_t memid;  // must come last due to zero'ing
 } mi_thread_data_t;
 
 
@@ -221,9 +231,9 @@ static mi_thread_data_t* mi_thread_data_zalloc(void) {
       is_zero = memid.initially_zero;
     }
   }
-  
+
   if (td != NULL && !is_zero) {
-    _mi_memzero_aligned(td, sizeof(*td));
+    _mi_memzero_aligned(td, offsetof(mi_thread_data_t,memid));
   }
   return td;
 }
@@ -257,7 +267,7 @@ void _mi_thread_data_collect(void) {
 }
 
 // Initialize the thread local default heap, called from `mi_thread_init`
-static bool _mi_heap_init(void) {
+static bool _mi_thread_heap_init(void) {
   if (mi_heap_is_initialized(mi_prim_get_default_heap())) return true;
   if (_mi_is_main_thread()) {
     // mi_assert_internal(_mi_heap_main.thread_id != 0);  // can happen on freeBSD where alloc is called before any initialization
@@ -273,25 +283,25 @@ static bool _mi_heap_init(void) {
 
     mi_tld_t*  tld = &td->tld;
     mi_heap_t* heap = &td->heap;
-    _mi_memcpy_aligned(heap, &_mi_heap_empty, sizeof(*heap));
-    heap->thread_id = _mi_thread_id();
-    _mi_random_init(&heap->random);
-    heap->cookie  = _mi_heap_random_next(heap) | 1;
-    heap->keys[0] = _mi_heap_random_next(heap);
-    heap->keys[1] = _mi_heap_random_next(heap);
-    heap->tld = tld;
-    tld->heap_backing = heap;
-    tld->heaps = heap;
-    tld->segments.stats = &tld->stats;
-    tld->segments.os = &tld->os;
-    tld->os.stats = &tld->stats;
-    _mi_heap_set_default_direct(heap);
+    _mi_tld_init(tld, heap);  // must be before `_mi_heap_init`
+    _mi_heap_init(heap, tld, _mi_arena_id_none(), false /* can reclaim */, 0 /* default tag */);
+    _mi_heap_set_default_direct(heap);   
   }
   return false;
 }
 
+// initialize thread local data
+void _mi_tld_init(mi_tld_t* tld, mi_heap_t* bheap) {
+  _mi_memzero_aligned(tld,sizeof(mi_tld_t));
+  tld->heap_backing = bheap;
+  tld->heaps = NULL;
+  tld->segments.stats = &tld->stats;
+  tld->segments.os = &tld->os;
+  tld->os.stats = &tld->stats;
+}
+
 // Free the thread local default heap (called from `mi_thread_done`)
-static bool _mi_heap_done(mi_heap_t* heap) {
+static bool _mi_thread_heap_done(mi_heap_t* heap) {
   if (!mi_heap_is_initialized(heap)) return true;
 
   // reset default heap
@@ -385,7 +395,7 @@ void mi_thread_init(void) mi_attr_noexcept
   // initialize the thread local default heap
   // (this will call `_mi_heap_set_default_direct` and thus set the
   //  fiber/pthread key to a non-zero value, ensuring `_mi_thread_done` is called)
-  if (_mi_heap_init()) return;  // returns true if already initialized
+  if (_mi_thread_heap_init()) return;  // returns true if already initialized
 
   _mi_stat_increase(&_mi_stats_main.threads, 1);
   mi_atomic_increment_relaxed(&thread_count);
@@ -396,28 +406,28 @@ void mi_thread_done(void) mi_attr_noexcept {
   _mi_thread_done(NULL);
 }
 
-void _mi_thread_done(mi_heap_t* heap) 
+void _mi_thread_done(mi_heap_t* heap)
 {
   // calling with NULL implies using the default heap
-  if (heap == NULL) { 
-    heap = mi_prim_get_default_heap(); 
+  if (heap == NULL) {
+    heap = mi_prim_get_default_heap();
     if (heap == NULL) return;
   }
 
   // prevent re-entrancy through heap_done/heap_set_default_direct (issue #699)
   if (!mi_heap_is_initialized(heap)) {
-    return; 
+    return;
   }
 
   // adjust stats
   mi_atomic_decrement_relaxed(&thread_count);
   _mi_stat_decrease(&_mi_stats_main.threads, 1);
-  
+
   // check thread-id as on Windows shutdown with FLS the main (exit) thread may call this on thread-local heaps...
   if (heap->thread_id != _mi_thread_id()) return;
 
   // abandon the thread local heap
-  if (_mi_heap_done(heap)) return;  // returns true if already ran
+  if (_mi_thread_heap_done(heap)) return;  // returns true if already ran
 }
 
 void _mi_heap_set_default_direct(mi_heap_t* heap)  {
@@ -425,7 +435,7 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
   #if defined(MI_TLS_SLOT)
   mi_prim_tls_slot_set(MI_TLS_SLOT,heap);
   #elif defined(MI_TLS_PTHREAD_SLOT_OFS)
-  *mi_tls_pthread_heap_slot() = heap;
+  *mi_prim_tls_pthread_heap_slot() = heap;
   #elif defined(MI_TLS_PTHREAD)
   // we use _mi_heap_default_key
   #else
@@ -434,7 +444,7 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
 
   // ensure the default heap is passed to `_mi_thread_done`
   // setting to a non-NULL value also ensures `mi_thread_done` is called.
-  _mi_prim_thread_associate_default_heap(heap);    
+  _mi_prim_thread_associate_default_heap(heap);
 }
 
 
@@ -594,7 +604,7 @@ static void mi_cdecl mi_process_done(void) {
 
   // release any thread specific resources and ensure _mi_thread_done is called on all but the main thread
   _mi_prim_thread_done_auto_done();
-  
+
   #ifndef MI_SKIP_COLLECT_ON_EXIT
     #if (MI_DEBUG || !defined(MI_SHARED_LIB))
     // free all memory if possible on process exit. This is not needed for a stand-alone process

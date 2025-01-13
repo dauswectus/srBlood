@@ -44,7 +44,7 @@ extern int g_useCwd;
 
 #define BLOODWIDESCREENDEF "blood_widescreen.def"
 
-#define BYTEVERSION 104
+#define BYTEVERSION 105
 
 void _SetErrorLoc(const char *pzFile, int nLine);
 void _ThrowError(const char *pzFormat, ...);
@@ -548,6 +548,7 @@ enum BLOOD_GLOBALFLAGS {
 
 enum searchpathtypes_t {
     SEARCHPATH_REMOVE = 1<<0,
+    SEARCHPATH_CRYPTIC = 1<<1,
 };
 
 extern char *g_grpNamePtr;

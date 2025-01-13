@@ -32,7 +32,7 @@ extern uint8_t gModernMap;
 
 
 
-// by NoOne: functions to quckly check range of specifical arrays
+// by NoOne: functions to quickly check range of specific arrays
 inline bool xspriRangeIsFine(int nXindex) {
     return (nXindex > 0 && nXindex < kMaxXSprites);
 }
@@ -122,6 +122,8 @@ struct XSPRITE {
     #endif
     signed int scale;                   // used for scaling SEQ size on sprites
 
+    // Calculates checksum for multiplayer games. Certain bits might be skipped.
+    uint32_t CalcChecksum(void);
 };
 
 struct XSECTOR {

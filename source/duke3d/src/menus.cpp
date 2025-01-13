@@ -914,7 +914,7 @@ static MenuEntry_t ME_MOUSESETUP_MOUSEAIMING = MAKE_MENUENTRY( "Vertical aiming:
 static MenuOption_t MEO_MOUSESETUP_INVERT = MAKE_MENUOPTION( &MF_Redfont, &MEOS_YesNo, &ud.mouseflip );
 static MenuEntry_t ME_MOUSESETUP_INVERT = MAKE_MENUENTRY( "Inverted aiming:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_INVERT, Option );
 
-static MenuRangeFloat_t MEO_MOUSESETUP_XSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[0], &MF_Redfont, 1.f, 50.f, 50.f, 99, DisplayTypeInteger|EnforceIntervals );
+static MenuRangeFloat_t MEO_MOUSESETUP_XSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[0], &MF_Redfont, 0.f, 50.f, 50.f, 101, DisplayTypeInteger|EnforceIntervals );
 static MenuEntry_t ME_MOUSESETUP_HORIZONTALSENSITIVITY = MAKE_MENUENTRY( "Horiz sens.:", &MF_Redfont, &MEF_BigOptionsRtSections, &MEO_MOUSESETUP_XSENSITIVITY, RangeFloat );
 
 static MenuRangeFloat_t MEO_MOUSESETUP_YSENSITIVITY = MAKE_MENURANGE( &CONTROL_MouseAxesSensitivity[1], &MF_Redfont, 0.f, 50.f, 50.f, 101, DisplayTypeInteger|EnforceIntervals );
@@ -2503,16 +2503,16 @@ static void Menu_PopulateVideoSetup()
     MenuEntry_DisableOnCondition(&ME_VIDEOSETUP_BORDERLESS, newfullscreen);
 
 #ifdef USE_OPENGL
+    auto const forbidClassic = (g_gameType & GAMEFLAG_NOCLASSIC) && rendermode != REND_CLASSIC;
 #ifdef POLYMER
-    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_ALL, g_gameType & (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER));
-    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_NOCLASSIC,
-                              rendermode != REND_POLYMER && ((g_gameType & (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER)) == (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER)
-                              || !(g_gameType & GAMEFLAG_NOCLASSIC)));
-    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_NOPOLYMER,
-                              rendermode != REND_CLASSIC && ((g_gameType & (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER)) == (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER)
-                              || !(g_gameType & GAMEFLAG_NOPOLYMER)));
+    auto const forbidPolymer = (g_gameType & GAMEFLAG_NOPOLYMER) && rendermode != REND_POLYMER;
+    auto const forbidNeither = !(g_gameType & (GAMEFLAG_NOCLASSIC|GAMEFLAG_NOPOLYMER));
+    auto const forbidBoth = forbidClassic && forbidPolymer;
+    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_ALL, forbidClassic || forbidPolymer);
+    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_NOCLASSIC, !forbidClassic || forbidNeither || forbidBoth);
+    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_NOPOLYMER, !forbidPolymer || forbidNeither || forbidBoth);
 #else
-    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_ALL, rendermode != REND_CLASSIC && (g_gameType & GAMEFLAG_NOCLASSIC));
+    MenuEntry_HideOnCondition(&ME_VIDEOSETUP_RENDERER_ALL, forbidClassic);
 #endif
 #endif
 }
@@ -3237,12 +3237,10 @@ static void Menu_PreDraw(MenuID_t cm, MenuEntry_t* entry, const vec2_t origin)
         }
         else if (msv.isOldScriptVer)
         {
-            Bsprintf(tempbuf, "This save was created with an older version of " APPNAME "\n"
-                              "and is not 100%% compatible with the current version of the game.\n\n"
-                              "If this data is important to you, we highly recommend that\n"
-                              "version of " APPNAME " be used to finish your playthrough instead.\n\n"
+            Bsprintf(tempbuf, "This save was created with a different version of " APPNAME "\n"
+                              "and may not be fully compatible with this version of the game.\n\n"
                               "Load game:\n\"%s\"", msv.brief.name);
-            Menu_DrawVerifyPrompt(origin.x, origin.y, tempbuf, 8);
+            Menu_DrawVerifyPrompt(origin.x, origin.y, tempbuf, 6);
         }
         else
         {

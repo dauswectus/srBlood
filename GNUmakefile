@@ -130,13 +130,18 @@ mimalloc_obj := $(obj)/$(mimalloc)
 
 mimalloc_excl := \
     alloc-override.c \
+    free.c \
     page-queue.c \
     static.c \
 
 mimalloc_objs := $(call getfiltered,mimalloc,*.c)
 mimalloc_objs += prim/prim.c
 
-mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -fexceptions -Wno-cast-qual -Wno-class-memaccess -Wno-unknown-pragmas -Wno-array-bounds -Wno-null-dereference -Wno-missing-field-initializers
+mimalloc_cflags := -D_WIN32_WINNT=0x0600 -DMI_USE_RTLGENRANDOM -DMI_SHOW_ERRORS -fexceptions -Wno-cast-qual -Wno-unknown-pragmas -Wno-array-bounds -Wno-null-dereference -Wno-missing-field-initializers
+
+ifeq (,$(filter 1 2 3 4 5 6 7,$(GCC_MAJOR)))
+    mimalloc_cflags += -Wno-class-memaccess
+endif
 
 
 #### imgui
@@ -258,7 +263,7 @@ engine_obj := $(obj)/$(engine)
 
 engine_cflags :=
 
-engine_deps := mimalloc
+engine_deps :=
 
 ifneq (1,$(SDL_TARGET))
     engine_deps += imgui
@@ -266,6 +271,10 @@ endif
 
 ifneq (0,$(USE_PHYSFS))
     engine_deps += physfs
+endif
+
+ifneq (0,$(USE_MIMALLOC))
+    engine_deps += mimalloc
 endif
 
 engine_editor_objs := \
@@ -428,7 +437,11 @@ tools_obj := $(obj)/$(tools)
 
 tools_cflags := $(engine_cflags) -I$(engine_src)
 
-tools_deps := engine_tools mimalloc
+tools_deps := engine_tools
+
+ifneq (0,$(USE_MIMALLOC))
+    tools_deps += mimalloc
+endif
 
 tools_targets := \
     arttool \
@@ -660,12 +673,12 @@ ifeq ($(PLATFORM),BSD)
 endif
 
 ifeq ($(PLATFORM),DARWIN)
-    LIBS += -lFLAC -lm \
-            -Wl,-framework,Cocoa -Wl,-framework,Carbon -Wl,-framework,OpenGL \
+    LIBS += -lFLAC \
+            -Wl,-framework,Cocoa -Wl,-framework,Carbon \
             -Wl,-framework,CoreMIDI -Wl,-framework,AudioUnit \
-            -Wl,-framework,AudioToolbox -Wl,-framework,IOKit -Wl,-framework,AGL
+            -Wl,-framework,AudioToolbox -Wl,-framework,IOKit
     ifneq (00,$(DARWIN9)$(DARWIN10))
-        LIBS += -Wl,-framework,QuickTime -lm
+        LIBS += -Wl,-framework,QuickTime
     endif
 
     ifeq ($(STARTUP_WINDOW),1)
@@ -940,10 +953,6 @@ ifeq ($(PLATFORM),WINDOWS)
     endif
 endif
 
-ifeq ($(PLATFORM),WII)
-    LIBS += -lvorbisidec
-endif
-
 ifeq (11,$(HAVE_GTK2)$(STARTUP_WINDOW))
     rr_game_objs += startgtk.game.cpp
     rr_game_gen_objs += game_banner.c
@@ -1210,16 +1219,19 @@ endif
 #### Includes
 
 COMPILERFLAGS += \
+    -MP -MMD \
     -I$(engine_inc) \
     -I$(mact_inc) \
     -I$(audiolib_inc) \
     -I$(glad_inc) \
     -I$(voidwrap_inc) \
-    -I$(mimalloc_inc) \
     -I$(imgui_inc) \
     -I$(libsmackerdec_inc) \
     -I$(hmpplay_inc) \
-    -MP -MMD \
+
+ifneq (0,$(USE_MIMALLOC))
+    COMPILERFLAGS += -I$(mimalloc_inc)
+endif
 
 ifneq (0,$(USE_PHYSFS))
     COMPILERFLAGS += -I$(physfs_inc) -DUSE_PHYSFS
@@ -1247,12 +1259,15 @@ libraries := \
     glad \
     imgui \
     libxmplite \
-    mimalloc \
     mact \
     voidwrap \
     libsmackerdec \
     hmpplay \
     n64 \
+
+ifneq (0,$(USE_MIMALLOC))
+    libraries += mimalloc
+endif
 
 ifneq (0,$(USE_PHYSFS))
     libraries += physfs

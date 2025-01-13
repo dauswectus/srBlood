@@ -368,8 +368,11 @@ void fakeProcessInput(PLAYER *pPlayer, GINPUT *pInput)
         gViewLookAdjust = 0.f;
     }
 
-    predict.at70 = pInput->syncFlags.run;
+#if 0 // syncFlags.run is not passed to input packet on ProcessFrame(), so don't apply this logic here
+    predict.at70 = VanillaMode() ? pInput->syncFlags.run : 0;
+#else
     predict.at70 = 0;
+#endif
     predict.at71 = pInput->buttonFlags.jump;
     if (predict.at48 == 1)
     {
@@ -424,7 +427,7 @@ void fakeProcessInput(PLAYER *pPlayer, GINPUT *pInput)
     }
     if (pInput->q16turn)
     {
-        if (bVanilla)
+        if (VanillaMode())
             predict.at30 = ((predict.at30&0x7ff0000)+(pInput->q16turn&0x7ff0000))&0x7ffffff;
         else
             predict.at30 = (predict.at30+pInput->q16turn)&0x7ffffff;
@@ -601,7 +604,7 @@ void fakePlayerProcess(PLAYER *pPlayer, GINPUT *pInput)
 
     predict.at34 = predict.at40 - predict.at38 - (12<<8);
 
-    predict.at0 = ClipLow(predict.at0-4, 0);
+    predict.at0 = ClipLow(predict.at0-kTicsPerFrame, 0);
 
     nSpeed >>= 16;
     if (predict.at48 == 1)
@@ -969,6 +972,8 @@ void viewBackupView(int nPlayer)
     pView->at30 = pPlayer->q16ang;
     pView->at50 = pPlayer->pSprite->x;
     pView->at54 = pPlayer->pSprite->y;
+    if (!VanillaMode())
+        pView->at58 = pPlayer->pSprite->z;
     pView->at38 = pPlayer->zView;
     pView->at34 = pPlayer->zWeapon-pPlayer->zView-0xc00;
     pView->at24 = pPlayer->q16horiz;
@@ -986,6 +991,8 @@ void viewCorrectViewOffsets(int nPlayer, vec3_t const *oldpos)
     VIEW *pView = &gPrevView[nPlayer];
     pView->at50 += pPlayer->pSprite->x-oldpos->x;
     pView->at54 += pPlayer->pSprite->y-oldpos->y;
+    if (!VanillaMode())
+        pView->at58 += pPlayer->pSprite->z-oldpos->z;
     pView->at38 += pPlayer->pSprite->z-oldpos->z;
 }
 
@@ -1283,13 +1290,12 @@ WEAPONICON gWeaponIconVoxel[] = {
     { -1, 0 },
 };
 
-int dword_14C508;
-
 void viewDrawStats(PLAYER *pPlayer, int x, int y)
 {
+    static int gLastPageTimeStats = 0;
     const int nFont = 3;
     char buffer[128];
-    if (!gLevelStats)
+    if (!gLevelStats || ((gLevelStats == 2) && (gViewMode == 3)))
         return;
 
     int nHeight;
@@ -1309,6 +1315,9 @@ void viewDrawStats(PLAYER *pPlayer, int x, int y)
     y += nHeight+1;
     sprintf(buffer, "S:%d/%d", gSecretMgr.nNormalSecretsFound, max(gSecretMgr.nNormalSecretsFound, gSecretMgr.nAllSecrets)); // if we found more than there are, increase the total - some levels have a bugged counter
     viewDrawText(3, buffer, x, y, 20, 0, 0, true, 256);
+    if (gViewMode == 3 && gViewSize > 3 && gLastPageTimeStats != gLevelTime) // redraw borders
+        viewUpdatePages();
+    gLastPageTimeStats = gLevelTime;
     if (gShowSpeedo)
     {
         y += nHeight + 1;
@@ -1318,70 +1327,95 @@ void viewDrawStats(PLAYER *pPlayer, int x, int y)
     }
 }
 
-struct POWERUPDISPLAY
-{
+#define kPowerUps 11
+
+const struct POWERUPDISPLAY {
     int nTile;
-    float nScaleRatio;
+    int nScaleRatio;
     int yOffset;
-    int remainingDuration;
+} gPowerups[kPowerUps] = {
+    {gPowerUpInfo[kPwUpShadowCloak].picnum, fix16_from_float(0.4f), 0}, // invisibility
+    {gPowerUpInfo[kPwUpReflectShots].picnum, fix16_from_float(0.4f), 5}, // reflects enemy shots
+    {gPowerUpInfo[kPwUpDeathMask].picnum, fix16_from_float(0.3f), 9}, // invulnerability
+    {gPowerUpInfo[kPwUpTwoGuns].picnum, fix16_from_float(0.25f), 4}, // guns akimbo
+    {gPowerUpInfo[kPwUpShadowCloakUseless].picnum, fix16_from_float(0.4f), 9}, // shadow cloak (does nothing, only appears at near the end of CP04)
+
+    // not in official maps
+    {gPowerUpInfo[kPwUpFeatherFall].picnum, fix16_from_float(0.3f), 7}, // feather fall
+    {gPowerUpInfo[kPwUpGasMask].picnum, fix16_from_float(0.4f), 4}, // gas mask
+    {gPowerUpInfo[kPwUpDoppleganger].picnum, fix16_from_float(0.5f), 5}, // doppelganger
+    {gPowerUpInfo[kPwUpAsbestArmor].picnum, fix16_from_float(0.3f), 9}, // asbestos armor
+    {gPowerUpInfo[kPwUpGrowShroom].picnum, fix16_from_float(0.4f), 4}, // grow shroom
+    {gPowerUpInfo[kPwUpShrinkShroom].picnum, fix16_from_float(0.4f), 4}, // shrink shroom
 };
-
-#define nPowerUps 11
-
-void sortPowerUps(POWERUPDISPLAY* powerups) {
-    for (int i = 1; i < nPowerUps; i++)
-    {
-        for (int j = 0; j < nPowerUps-i; j++)
-        {
-            if (powerups[j].remainingDuration > powerups[j+1].remainingDuration)
-            {
-                POWERUPDISPLAY temp = powerups[j];
-                powerups[j] = powerups[j+1];
-                powerups[j+1] = temp;
-            }
-        }
-    }
-}
 
 void viewDrawPowerUps(PLAYER* pPlayer)
 {
     if (!gPowerupDuration)
         return;
 
-    POWERUPDISPLAY powerups[nPowerUps];
-    powerups[0] = { gPowerUpInfo[kPwUpShadowCloak].picnum,  0.4f, 0, pPlayer->pwUpTime[kPwUpShadowCloak] }; // Invisibility
-    powerups[1] = { gPowerUpInfo[kPwUpReflectShots].picnum, 0.4f, 5, pPlayer->pwUpTime[kPwUpReflectShots] }; // Reflects enemy shots
-    powerups[2] = { gPowerUpInfo[kPwUpDeathMask].picnum, 0.3f, 9, pPlayer->pwUpTime[kPwUpDeathMask] }; // Invulnerability
-    powerups[3] = { gPowerUpInfo[kPwUpTwoGuns].picnum, 0.3f, 5, pPlayer->pwUpTime[kPwUpTwoGuns] }; // Guns Akimbo
-    powerups[4] = { gPowerUpInfo[kPwUpShadowCloakUseless].picnum, 0.4f, 9, pPlayer->pwUpTime[kPwUpShadowCloakUseless] }; // Does nothing, only appears at near the end of Cryptic Passage's Lost Monastery (CP04)
+    int nPowerActive[kPowerUps];
+    nPowerActive[0] = pPlayer->pwUpTime[kPwUpShadowCloak]; // invisibility
+    nPowerActive[1] = pPlayer->pwUpTime[kPwUpReflectShots]; // reflects enemy shots
+    nPowerActive[2] = pPlayer->pwUpTime[kPwUpDeathMask]; // invulnerability
+    nPowerActive[3] = pPlayer->pwUpTime[kPwUpTwoGuns];// guns akimbo
+    nPowerActive[4] = pPlayer->pwUpTime[kPwUpShadowCloakUseless]; // shadow cloak
 
-    // Not in official maps, but custom maps can use them
-    powerups[5] = { gPowerUpInfo[kPwUpFeatherFall].picnum, 0.3f, 7, pPlayer->pwUpTime[kPwUpFeatherFall] }; // Makes player immune to fall damage
-    powerups[6] = { gPowerUpInfo[kPwUpGasMask].picnum, 0.4f, 4, pPlayer->pwUpTime[kPwUpGasMask] }; // Makes player immune to choke damage
-    powerups[7] = { gPowerUpInfo[kPwUpDoppleganger].picnum, 0.5f, 5, pPlayer->pwUpTime[kPwUpDoppleganger] }; // Works in multiplayer, it swaps player's team colors, so enemy team player thinks it's a team mate
-    powerups[8] = { gPowerUpInfo[kPwUpAsbestArmor].picnum, 0.3f, 9, pPlayer->pwUpTime[kPwUpAsbestArmor] }; // Makes player immune to fire damage and draws HUD
-    powerups[9] = { gPowerUpInfo[kPwUpGrowShroom].picnum, 0.4f, 4, pPlayer->pwUpTime[kPwUpGrowShroom] }; // Grows player size, works only if gModernMap == true
-    powerups[10] = { gPowerUpInfo[kPwUpShrinkShroom].picnum, 0.4f, 4, pPlayer->pwUpTime[kPwUpShrinkShroom] }; // Shrinks player size, works only if gModernMap == true
+    // not in official maps
+    nPowerActive[5] = pPlayer->pwUpTime[kPwUpFeatherFall]; // feather fall
+    nPowerActive[6] = pPlayer->pwUpTime[kPwUpGasMask]; // gas mask
+    nPowerActive[7] = pPlayer->pwUpTime[kPwUpDoppleganger]; // doppelganger
+    nPowerActive[8] = pPlayer->pwUpTime[kPwUpAsbestArmor]; // asbestos armor
+    nPowerActive[9] = pPlayer->pwUpTime[kPwUpGrowShroom]; // grow shroom
+    nPowerActive[10] = pPlayer->pwUpTime[kPwUpShrinkShroom]; // shrink shroom
 
-    sortPowerUps(powerups);
-
-    const int warningTime = 5;
-    const int x = 15;
-    int y = 50;
-    for (int i = 0; i < nPowerUps; i++)
+    int nSortPower[kPowerUps+1];
+    unsigned char nSortIndex[kPowerUps+1];
+    unsigned char nSortCount = 0;
+    for (int i = 0; i < kPowerUps; i++) // sort powerups
     {
-        if (powerups[i].remainingDuration)
+        if (!nPowerActive[i])
+            continue;
+        nSortIndex[nSortCount] = i;
+        nSortPower[nSortCount] = nPowerActive[i];
+        nSortCount++;
+    }
+    for (int i = 1; i < nSortCount; i++)
+    {
+        for (int j = 0; j < nSortCount-i; j++)
         {
-            int remainingSeconds = powerups[i].remainingDuration / 100;
-            if (remainingSeconds > warningTime || ((int)totalclock & 32))
-            {
-                DrawStatMaskedSprite(powerups[i].nTile, x, y + powerups[i].yOffset, 0, 0, 256, (int)(65536 * powerups[i].nScaleRatio));
-            }
-
-            DrawStatNumber("%d", remainingSeconds, kSBarNumberInv, x + 15, y, 0, remainingSeconds > warningTime ? 0 : 2, 256, 65536 * 0.5);
-            y += 20;
+            if (nSortPower[j] <= nSortPower[j+1])
+                continue;
+            nSortPower[kPowerUps] = nSortPower[j];
+            nSortPower[j] = nSortPower[j+1];
+            nSortPower[j+1] = nSortPower[kPowerUps];
+            nSortIndex[kPowerUps] = nSortIndex[j];
+            nSortIndex[j] = nSortIndex[j+1];
+            nSortIndex[j+1] = nSortIndex[kPowerUps];
         }
     }
+
+    const int nWarning = 5;
+    const int x = 15;
+    int y = 50;
+    for (int i = 0; i < nSortCount; i++)
+    {
+        const POWERUPDISPLAY *pPowerups = &gPowerups[nSortIndex[i]];
+        int nTime = nSortPower[i] / 100;
+        if (nTime > nWarning || ((int)totalclock & 32))
+            DrawStatMaskedSprite(pPowerups->nTile, x, y + pPowerups->yOffset, 0, 0, 256, pPowerups->nScaleRatio);
+        DrawStatNumber("%d", nTime, kSBarNumberInv, x + 15, y, 0, nTime > nWarning ? 0 : 2, 256, fix16_from_float(0.5f));
+        y += 20;
+    }
+    static int gLastPageTimePowerup = 0;
+    static int gLastPageTimePowerupCount = 0;
+    if (gViewMode == 3 && gViewSize > 3) // redraw borders
+    {
+        if (gLastPageTimePowerup != gLevelTime && nSortCount || gLastPageTimePowerupCount != nSortCount)
+            viewUpdatePages();
+    }
+    gLastPageTimePowerup = gLevelTime;
+    gLastPageTimePowerupCount = nSortCount;
 }
 
 void viewDrawMapTitle(void)
@@ -1403,20 +1437,24 @@ void viewDrawMapTitle(void)
 
 void viewDrawAimedPlayerName(void)
 {
-    if (!gShowPlayerNames || (gView->aim.dx == 0 && gView->aim.dy == 0))
+    if (!gShowPlayerNames || (gGameOptions.nGameType == kGameTypeSinglePlayer) || !gView->pSprite)
         return;
+    const int nX = Cos(gView->pSprite->ang)>>16;
+    const int nY = Sin(gView->pSprite->ang)>>16;
+    if (nX == 0 && nY == 0)
+        return;
+    const int nZ = gView->slope;
 
-    int hit = HitScan(gView->pSprite, gView->zView, gView->aim.dx, gView->aim.dy, gView->aim.dz, CLIPMASK0, 512);
+    const int hit = HitScan(gView->pSprite, gView->zView, nX, nY, nZ, CLIPMASK0, 512);
     if (hit == 3)
     {
         spritetype* pSprite = &sprite[gHitInfo.hitsprite];
-        if (IsPlayerSprite(pSprite))
-        {
-            char nPlayer = pSprite->type-kDudePlayer1;
-            char* szName = gProfile[nPlayer].name;
-            int nPalette = (gPlayer[nPlayer].teamId&3)+11;
-            viewDrawText(4, szName, 160, 125, -128, nPalette, 1, 1);
-        }
+        if (!IsPlayerSprite(pSprite))
+            return;
+        char nPlayer = pSprite->type-kDudePlayer1;
+        char *szName = gProfile[nPlayer].name;
+        int nPalette = (gPlayer[nPlayer].teamId&3)+11;
+        viewDrawText(4, szName, 160, 125, -128, nPalette, 1, 1);
     }
 }
 
@@ -1454,11 +1492,10 @@ void viewDrawPack(PLAYER *pPlayer, int x, int y)
             x += tilesiz[gPackIcons[nPack]].x + 1;
         }
     }
-    if (pPlayer->packItemTime != dword_14C508)
-    {
+    static int gLastPageTimePack = 0;
+    if (pPlayer->packItemTime != gLastPageTimePack) // redraw borders
         viewUpdatePages();
-    }
-    dword_14C508 = pPlayer->packItemTime;
+    gLastPageTimePack = pPlayer->packItemTime;
 }
 
 void DrawPackItemInStatusBar(PLAYER *pPlayer, int x, int y, int x2, int y2, int nStat)
@@ -1620,6 +1657,11 @@ void viewDrawCtfHud(ClockTicks arg)
     else if (redFlagTaken)
         DrawStatMaskedSprite(4097, 307, 111, 0, redFlagCarrierColor ? 2 : 10, 512, 65536);
     flashTeamScore(arg, 1, true);
+
+    static int gLastPageTimeFlag = 0;
+    if (gViewMode == 3 && gViewSize > 3 && (gLastPageTimeFlag != gLevelTime)) // redraw borders
+        viewUpdatePages();
+    gLastPageTimeFlag = gLevelTime;
 }
 
 void UpdateStatusBar(ClockTicks arg)
@@ -1964,6 +2006,7 @@ void viewInit(void)
 
 void viewResizeView(int size)
 {
+    const char bDrawFragsBg = (gGameOptions.nGameType != kGameTypeSinglePlayer) && (!VanillaMode() || gGameOptions.nGameType != kGameTypeTeams);
     int xdimcorrect = ClipHigh(scale(ydim, 4, 3), xdim);
     gViewXCenter = xdim-xdim/2;
     gViewYCenter = ydim-ydim/2;
@@ -1979,7 +2022,7 @@ void viewResizeView(int size)
         gViewX1 = xdim-1;
         gViewY0 = 0;
         gViewY1 = ydim-1;
-        if (gGameOptions.nGameType != kGameTypeSinglePlayer)
+        if (bDrawFragsBg)
         {
             gViewY0 = (tilesiz[2229].y*ydim*((gNetPlayers+3)/4))/200;
         }
@@ -1994,7 +2037,7 @@ void viewResizeView(int size)
         gViewY0 = 0;
         gViewX1 = xdim-1;
         gViewY1 = ydim-1-(25*ydim)/200;
-        if (gGameOptions.nGameType != kGameTypeSinglePlayer)
+        if (bDrawFragsBg)
         {
             gViewY0 = (tilesiz[2229].y*ydim*((gNetPlayers+3)/4))/200;
         }
@@ -2010,7 +2053,22 @@ void viewResizeView(int size)
         gViewY1S = divscale16(gViewY1, yscale);
     }
     videoSetViewableArea(gViewX0, gViewY0, gViewX1, gViewY1);
-    gGameMessageMgr.SetCoordinates(gViewX0S + 1, gViewY0S + 1);
+    if (gViewMode == 4) // 2D map view
+    {
+        int nOffset = bDrawFragsBg && !VanillaMode() ? (tilesiz[2229].y*ydim*((gNetPlayers+3)/4))/200 : 0;
+        nOffset = divscale16(nOffset, yscale);
+        nOffset += gGameOptions.nGameType == kGameTypeSinglePlayer && !VanillaMode() ? 6 : 1;
+        gGameMessageMgr.SetCoordinates(1, nOffset);
+    }
+    else
+    {
+        int nOffset = 1;
+        if ((gGameOptions.nGameType == kGameTypeTeams) && VanillaMode()) // lower text for vanilla CTF hud (v1.21 did not do this)
+            nOffset = 15;
+        else if ((gGameOptions.nGameType == kGameTypeSinglePlayer) && (gViewSize < 4) && !VanillaMode()) // lower message position for single-player
+            nOffset = 6;
+        gGameMessageMgr.SetCoordinates(gViewX0S + 1, gViewY0S + nOffset);
+    }
     viewSetCrosshairColor(CrosshairColors.r, CrosshairColors.g, CrosshairColors.b);
     viewUpdatePages();
 }
@@ -2032,7 +2090,8 @@ void UpdateFrame(void)
 
 void viewDrawInterface(ClockTicks arg)
 {
-    if (gViewMode == 3/* && gViewSize >= 3*/ && (pcBackground != 0 || videoGetRenderMode() >= REND_POLYMOST))
+    const char bDrawFragsBg = (gGameOptions.nGameType != kGameTypeSinglePlayer) && (!VanillaMode() || gGameOptions.nGameType != kGameTypeTeams);
+    if (gViewMode == 3 && (gViewSize >= 3 || bDrawFragsBg) && (pcBackground != 0 || videoGetRenderMode() >= REND_POLYMOST))
     {
         UpdateFrame();
         pcBackground--;
@@ -2516,6 +2575,7 @@ tspritetype *viewAddEffect(int nTSprite, VIEW_EFFECT nViewEffect)
 }
 
 LOCATION gPrevSpriteLoc[kMaxSprites];
+static LOCATION gViewSpritePredictLoc;
 
 static void viewApplyDefaultPal(tspritetype *pTSprite, sectortype const *pSector)
 {
@@ -2557,7 +2617,14 @@ void viewProcessSprites(int32_t cX, int32_t cY, int32_t cZ, int32_t cA, int32_t 
 
         auto const tsprflags = pTSprite->clipdist;
 
-        if (gViewInterpolate && TestBitString(gInterpolateSprite, nSprite) && !(pTSprite->flags&512))
+        if (gView && (gView->pSprite == &sprite[nSprite]) && IsPlayerSprite(pTSprite) && gViewInterpolate && !VanillaMode()) // improve network player prediction while in third person/co-op view
+        {
+            pTSprite->x = gViewSpritePredictLoc.x;
+            pTSprite->y = gViewSpritePredictLoc.y;
+            pTSprite->z = gViewSpritePredictLoc.z;
+            pTSprite->ang = fix16_to_int(gViewSpritePredictLoc.ang);
+        }
+        else if (gViewInterpolate && TestBitString(gInterpolateSprite, nSprite) && !(pTSprite->flags&512))
         {
             LOCATION *pPrevLoc = &gPrevSpriteLoc[nSprite];
             pTSprite->x = interpolate(pPrevLoc->x, pTSprite->x, gInterpolate);
@@ -3424,7 +3491,7 @@ void viewDrawScreen(void)
     lastUpdate = totalclock;
     if (!gPaused && (!CGameMenuMgr::m_bActive || gGameOptions.nGameType != kGameTypeSinglePlayer))
     {
-        gInterpolate = ((totalclock-gNetFifoClock)+4).toScale16()/4;
+        gInterpolate = ((totalclock-gNetFifoClock)+kTicsPerFrame).toScale16()/kTicsPerFrame;
     }
     if (gInterpolate < 0 || gInterpolate > 65536)
     {
@@ -3457,6 +3524,7 @@ void viewDrawScreen(void)
         renderSetAspect(viewingRange_fov, yxaspect);
         int cX = gView->pSprite->x;
         int cY = gView->pSprite->y;
+        gViewSpritePredictLoc.z = gView->pSprite->z;
         int cZ = gView->zView;
         int zDelta = gView->zWeapon-gView->zView-(12<<8);
         fix16_t cA = gView->q16ang;
@@ -3483,6 +3551,7 @@ void viewDrawScreen(void)
                 v8c = interpolate(predictOld.at8, predict.at8, gInterpolate);
                 v4c = interpolate(predictOld.at1c, predict.at1c, gInterpolate);
                 v48 = interpolate(predictOld.at18, predict.at18, gInterpolate);
+                gViewSpritePredictLoc.z = interpolate(predictOld.at58, predict.at58, gInterpolate);
             }
             else
             {
@@ -3498,6 +3567,7 @@ void viewDrawScreen(void)
                 v8c = interpolate(pView->at8, v8c, gInterpolate);
                 v4c = interpolate(pView->at1c, v4c, gInterpolate);
                 v48 = interpolate(pView->at18, v48, gInterpolate);
+                gViewSpritePredictLoc.z = interpolate(pView->at58, gViewSpritePredictLoc.z, gInterpolate);
             }
         }
         if (gView == gMe && (numplayers <= 1 || gPrediction) && gView->pXSprite->health != 0 && !VanillaMode())
@@ -3507,6 +3577,7 @@ void viewDrawScreen(void)
             q16look = gViewLook;
             q16horiz = fix16_from_float(100.f * tanf(fix16_to_float(q16look) * fPI / 1024.f));
         }
+        gViewSpritePredictLoc.x = cX, gViewSpritePredictLoc.y = cY, gViewSpritePredictLoc.ang = cA;
         viewUpdateShake();
         q16horiz += fix16_from_int(shakeHoriz);
         cA += fix16_from_int(shakeAngle);
@@ -3516,7 +3587,7 @@ void viewDrawScreen(void)
         v4c += shakeBobX;
         v48 += shakeBobY;
         q16horiz += fix16_from_int(mulscale30(0x40000000-Cos(gView->tiltEffect<<2), 30));
-        if (gViewPos == 0)
+        if (gViewPos == VIEWPOS_0)
         {
             if (gViewHBobbing)
             {
@@ -3731,7 +3802,7 @@ RORHACK:
         fix16_t deliriumPitchI = gViewInterpolate ? interpolate(fix16_from_int(deliriumPitchO), fix16_from_int(deliriumPitch), gInterpolate) : fix16_from_int(deliriumPitch);
         DrawMirrors(cX, cY, cZ, cA, q16horiz + fix16_from_int(defaultHoriz) + deliriumPitchI, gInterpolate, bLink && !VanillaMode() ? gViewIndex : -1); // only hide self sprite while traversing between sector
         int bakCstat = gView->pSprite->cstat;
-        if (gViewPos == 0) // don't render self while in first person view
+        if (gViewPos == VIEWPOS_0) // don't render self while in first person view
         {
             gView->pSprite->cstat |= CSTAT_SPRITE_INVISIBLE;
         }
@@ -3834,7 +3905,7 @@ RORHACK:
             }
         }
 #endif
-        if (gViewPos == 0)
+        if (gViewPos == VIEWPOS_0)
         {
             if (gAimReticle)
             {
@@ -3864,7 +3935,7 @@ RORHACK:
            
 
         }
-        if (gViewPos == 0 && gView->pXSprite->burnTime > 60)
+        if (gViewPos == VIEWPOS_0 && gView->pXSprite->burnTime > 60)
         {
             viewBurnTime(gView->pXSprite->burnTime);
         }

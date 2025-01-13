@@ -144,6 +144,7 @@ fix16_t gViewLook, gViewAngle;
 float gViewAngleAdjust;
 float gViewLookAdjust;
 int gViewLookRecenter;
+int gCrouchToggleState = 0;
 
 void ctrlGetInput(void)
 {
@@ -307,7 +308,26 @@ void ctrlGetInput(void)
         gInput.buttonFlags.jump = 1;
 
     if (BUTTON(gamefunc_Crouch))
+        gInput.buttonFlags.crouch = 1, gCrouchToggleState = 0;
+
+    if (BUTTON(gamefunc_Crouch_Toggle) && !gInput.buttonFlags.jump)
+    {
+        if (gMe && gMe->isUnderwater)
+            gCrouchToggleState = 0, gInput.buttonFlags.crouch = 1;
+        else if (gCrouchToggleState <= 1) // start crouching
+            gCrouchToggleState = 1, gInput.buttonFlags.crouch = 1;
+        else if (gCrouchToggleState == 2) // stop crouching
+            gCrouchToggleState = 3;
+    }
+    else if ((gCrouchToggleState > 0) && (gCrouchToggleState < 3) && !gInput.buttonFlags.jump && gMe && !gMe->isUnderwater)
+    {
+        gCrouchToggleState = 2;
         gInput.buttonFlags.crouch = 1;
+    }
+    else
+    {
+        gCrouchToggleState = 0;
+    }
 
     if (BUTTON(gamefunc_Weapon_Fire))
         gInput.buttonFlags.shoot = 1;
@@ -486,6 +506,11 @@ void ctrlGetInput(void)
     {
         input.strafe -= info.dx>>1;
         input.forward -= info.dz>>1;
+        if (!run) // when autorun is off/run is not held, reduce overall speed for controller
+        {
+            input.strafe = clamp(input.strafe, -256, 256);
+            input.forward = clamp(input.forward, -256, 256);
+        }
         if (info.mousey == 0)
         {
             if (gMouseAim)

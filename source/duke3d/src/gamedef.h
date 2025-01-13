@@ -160,7 +160,6 @@ extern int32_t g_numXStrings;
 extern int32_t g_scriptVersion;
 extern int32_t g_totalLines;
 extern int32_t g_warningCnt;
-extern uint32_t g_scriptcrc;
 extern int32_t otherp;
 extern uint8_t *bitptr;
 
@@ -1346,6 +1345,8 @@ enum IterationTypes_t
     TRANSFORM(CON_USERQUOTE) DELIMITER \
     TRANSFORM(CON_WACKPLAYER) DELIMITER \
     TRANSFORM(CON_WRITEARRAYTOFILE) DELIMITER \
+    TRANSFORM(CON_YIELD) DELIMITER \
+    TRANSFORM(CON_YIELDJUMP) DELIMITER \
     TRANSFORM(CON_ZSHOOT) DELIMITER \
     \
     TRANSFORM(CON_OPCODE_END)

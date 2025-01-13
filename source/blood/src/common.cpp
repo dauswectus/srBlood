@@ -284,14 +284,33 @@ static void Blood_Add_GOG_OUWB_Linux(const char * path)
 }
 #endif
 
+#if defined EDUKE32_OSX || defined __linux__ || defined EDUKE32_BSD || defined _WIN32
+static int32_t Blood_Add_FS_DOS(char * const buf, size_t const size, size_t const charsWritten)
+{
+    Bsnprintf(buf + charsWritten, size - charsWritten, "/DOS/C/BLOOD");
+    return addsearchpath(buf);
+}
+
+static int32_t Blood_Add_FS(char * const buf, size_t const size, size_t const charsWritten)
+{
+    buf[charsWritten] = '\0';
+    int32_t const addedmain = addsearchpath(buf);
+    Bsnprintf(buf + charsWritten, size - charsWritten, "/addons/Cryptic Passage");
+    addsearchpath_user(buf, SEARCHPATH_CRYPTIC);
+    return addedmain;
+}
+#endif
+
 #if defined EDUKE32_OSX || defined __linux__ || defined EDUKE32_BSD
 static void Blood_AddSteamPaths(const char *basepath)
 {
     char buf[BMAX_PATH];
 
     // Blood: Fresh Supply - Steam
-    Bsnprintf(buf, sizeof(buf), "%s/steamapps/common/Blood", basepath);
-    addsearchpath(buf);
+    size_t const charsWritten = Bsnprintf(buf, sizeof(buf), "%s/steamapps/common/Blood", basepath);
+    if (Blood_Add_FS_DOS(buf, sizeof(buf), charsWritten) == 0)
+        return;
+    Blood_Add_FS(buf, sizeof(buf), charsWritten);
 
     // Blood: One Unit Whole Blood - Steam
     Bsnprintf(buf, sizeof(buf), "%s/steamapps/common/One Unit Whole Blood", basepath);
@@ -376,54 +395,47 @@ void G_AddSearchPaths(void)
 #elif defined (_WIN32)
     char buf[BMAX_PATH] = {0};
     DWORD bufsize;
-    bool found = false;
-
-    // Blood: One Unit Whole Blood - Steam
-    bufsize = sizeof(buf);
-    if (!found && Paths_ReadRegistryValue(R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 299030)", "InstallLocation", buf, &bufsize))
-    {
-        addsearchpath(buf);
-        found = true;
-    }
-
-    // Blood: One Unit Whole Blood - GOG.com
-    bufsize = sizeof(buf);
-    if (!found && Paths_ReadRegistryValue(R"(SOFTWARE\GOG.com\Games\1207658856)", "path", buf, &bufsize))
-    {
-        addsearchpath(buf);
-        found = true;
-    }
-    bufsize = sizeof(buf);
-    if (!found && Paths_ReadRegistryValue("SOFTWARE\\GOG.com\\GOGONEUNITONEBLOOD", "PATH", buf, &bufsize))
-    {
-        addsearchpath(buf);
-        found = true;
-    }
 
     // Blood: Fresh Supply - Steam
     bufsize = sizeof(buf);
-    if (!found && Paths_ReadRegistryValue(R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1010750)", "InstallLocation", buf, &bufsize))
+    if (Paths_ReadRegistryValue(R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 1010750)", "InstallLocation", buf, &bufsize))
     {
-        char * const suffix = buf + bufsize - 1;
-        DWORD const remaining = sizeof(buf) - bufsize;
-
-        addsearchpath(buf);
-        strncpy(suffix, "/addons/Cryptic Passage", remaining);
-        addsearchpath(buf);
-        found = true;
+        size_t const charsWritten = bufsize - 1;
+        if (Blood_Add_FS_DOS(buf, sizeof(buf), charsWritten) == 0)
+            return;
+        Blood_Add_FS(buf, sizeof(buf), charsWritten);
     }
 
     // Blood: Fresh Supply - GOG.com
     bufsize = sizeof(buf);
-    if (!found && Paths_ReadRegistryValue(R"(SOFTWARE\GOG.com\Games\1374469660)", "path", buf, &bufsize))
+    if (Paths_ReadRegistryValue(R"(SOFTWARE\GOG.com\Games\1374469660)", "path", buf, &bufsize))
     {
-        char * const suffix = buf + bufsize - 1;
-        DWORD const remaining = sizeof(buf) - bufsize;
+        size_t const charsWritten = bufsize - 1;
+        if (Blood_Add_FS_DOS(buf, sizeof(buf), charsWritten) == 0)
+            return;
+        Blood_Add_FS(buf, sizeof(buf), charsWritten);
+    }
 
-        addsearchpath(buf);
-        strncpy(suffix, "/addons/Cryptic Passage", remaining);
-        addsearchpath(buf);
-        found = true;
+    // Blood: One Unit Whole Blood - Steam
+    bufsize = sizeof(buf);
+    if (Paths_ReadRegistryValue(R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 299030)", "InstallLocation", buf, &bufsize))
+    {
+        if (addsearchpath(buf) == 0)
+            return;
+    }
+
+    // Blood: One Unit Whole Blood - GOG.com
+    bufsize = sizeof(buf);
+    if (Paths_ReadRegistryValue(R"(SOFTWARE\GOG.com\Games\1207658856)", "path", buf, &bufsize))
+    {
+        if (addsearchpath(buf) == 0)
+            return;
+    }
+    bufsize = sizeof(buf);
+    if (Paths_ReadRegistryValue("SOFTWARE\\GOG.com\\GOGONEUNITONEBLOOD", "PATH", buf, &bufsize))
+    {
+        if (addsearchpath(buf) == 0)
+            return;
     }
 #endif
 #endif

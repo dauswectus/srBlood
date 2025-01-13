@@ -218,9 +218,6 @@
     <ClCompile Include="..\..\source\build\src\smmalloc_tls.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\source\build\src\asan_guarded_allocator.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\source\build\src\loguru.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -506,9 +503,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\source\build\include\log.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\source\build\include\httplib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

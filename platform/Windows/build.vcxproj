@@ -267,9 +267,6 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\..\source\build\src\animvpx.cpp" />
-    <ClCompile Include="..\..\source\build\src\asan_guarded_allocator.cpp">
-      <ExcludedFromBuild>true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="..\..\source\build\src\baselayer.cpp" />
     <ClCompile Include="..\..\source\build\src\cache1d.cpp" />
     <ClCompile Include="..\..\source\build\src\clip.cpp" />
@@ -378,7 +375,6 @@
     <ClInclude Include="..\..\source\build\include\gtkbits.h" />
     <ClInclude Include="..\..\source\build\include\hash.h" />
     <ClInclude Include="..\..\source\build\include\hightile.h" />
-    <ClInclude Include="..\..\source\build\include\httplib.h" />
     <ClInclude Include="..\..\source\build\include\klzw.h" />
     <ClInclude Include="..\..\source\build\include\kplib.h" />
     <ClInclude Include="..\..\source\build\include\libasync.h" />

@@ -49,6 +49,7 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "Strafe_Right",
    "Jump",
    "Crouch",
+   "Crouch_Toggle",
    "Run",
    "AutoRun",
    "Open",
@@ -94,6 +95,8 @@ char gamefunctions[NUMGAMEFUNCTIONS][MAXGAMEFUNCLEN] =
    "ProximityBombs",
    "RemoteBombs",
    "Show_Console",
+   "Quick_Save",
+   "Quick_Load",
    };
 
 #ifdef __SETUP__
@@ -110,6 +113,7 @@ const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    "D", "",
    "Space", "/",
    "LCtrl", "",
+   "", "",
    "LShift", "RShift",
    "CapLck", "",
    "E", "",
@@ -155,6 +159,8 @@ const char keydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    "P", "",
    "R", "",
    "`", "",
+   "F6", "",
+   "F9", "",
    };
 
 const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
@@ -169,6 +175,7 @@ const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    ".", "",
    "A", "/",
    "Z", "",
+   "", "",
    "LShift", "RShift",
    "CapLck", "",
    "Space", "",
@@ -214,6 +221,8 @@ const char oldkeydefaults[NUMGAMEFUNCTIONS*2][MAXGAMEFUNCLEN] =
    "P", "",
    "R", "",
    "`", "",
+   "F6", "",
+   "F9", "",
    };
 
 static const char * mousedefaults[MAXMOUSEBUTTONS] =
@@ -293,6 +302,83 @@ static const char * joystickanalogdefaults[MAXJOYAXES] =
 
 static const char * joystickdigitaldefaults[MAXJOYDIGITAL] =
    {
+   };
+#else
+static const char * joystickdefaults[MAXJOYBUTTONSANDHATS] =
+   {
+    "Jump",
+    "Crouch",
+    "Open",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "Turn_Around",
+    "Previous_Weapon",
+    "Next_Weapon",
+    "",
+    "Inventory_Use",
+    "Inventory_Left",
+    "Inventory_Right"
+   };
+
+
+static const char * joystickclickeddefaults[MAXJOYBUTTONSANDHATS] =
+   {
+   };
+
+
+static const char * joystickanalogdefaults[MAXJOYAXES] =
+   {
+   "analog_strafing",
+   "analog_moving",
+   "analog_turning",
+   "analog_lookingupanddown",
+   };
+
+
+static const int32_t joystickanalogscaledefaults[MAXJOYAXES] =
+   {
+   DEFAULTJOYSTICKANALOGUESCALE,
+   DEFAULTJOYSTICKANALOGUESCALE,
+   DEFAULTJOYSTICKANALOGUESCALE/2,
+   DEFAULTJOYSTICKANALOGUESCALE/4
+   };
+
+
+static const int32_t joystickanalogdeaddefaults[MAXJOYAXES] =
+   {
+   DEFAULTJOYSTICKANALOGUEDEAD*5,
+   DEFAULTJOYSTICKANALOGUEDEAD*4,
+   DEFAULTJOYSTICKANALOGUEDEAD*2,
+   DEFAULTJOYSTICKANALOGUEDEAD*2
+   };
+
+
+static const int32_t joystickanalogsaturatedefaults[MAXJOYAXES] =
+   {
+   DEFAULTJOYSTICKANALOGUESATURATE*3,
+   DEFAULTJOYSTICKANALOGUESATURATE*3,
+   DEFAULTJOYSTICKANALOGUESATURATE*2,
+   DEFAULTJOYSTICKANALOGUESATURATE*2
+   };
+
+
+static const char * joystickdigitaldefaults[MAXJOYDIGITAL] =
+   {
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "Weapon_Special_Fire",
+    "",
+    "Weapon_Fire",
    };
 #endif
 

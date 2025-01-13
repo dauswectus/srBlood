@@ -2895,6 +2895,11 @@ GAMEEXEC_STATIC void VM_Execute(int vm_execution_depth /*= false*/)
                     dispatch();
                 }
 
+            vInstruction(CON_YIELD):
+                insptr++;
+                dukeMaybeDrawFrame();
+                dispatch();
+
             vInstruction(CON_RETURN):
                 vm.flags |= VM_RETURN;
 #if !defined CON_USE_COMPUTED_GOTO
@@ -2915,6 +2920,8 @@ GAMEEXEC_STATIC void VM_Execute(int vm_execution_depth /*= false*/)
                 vm.flags |= VM_TERMINATE;
                 return;
 
+            vInstruction(CON_YIELDJUMP) :  // this is used for event chaining
+                dukeMaybeDrawFrame();
             vInstruction(CON_JUMP):  // this is used for event chaining
                 insptr++;
                 tw = Gv_GetVar(*insptr++);
@@ -3566,13 +3573,27 @@ breakfor:
                 insptr++;
 
                 tw = (*insptr++ - vm.pSprite->xrepeat) << 1;
-                vm.pSprite->xrepeat += ksgn(tw);
 
-                if ((vm.pSprite->picnum == APLAYER && vm.pSprite->yrepeat < 36) || *insptr < vm.pSprite->yrepeat
-                    || ((vm.pSprite->yrepeat * (tilesiz[vm.pSprite->picnum].y + 8)) << 2) < (vm.pActor->floorz - vm.pActor->ceilingz))
+                if (PLUTOPAK)
                 {
+                    vm.pSprite->xrepeat += ksgn(tw);
+
+                    if ((vm.pSprite->picnum == APLAYER && vm.pSprite->yrepeat < 36) || *insptr < vm.pSprite->yrepeat
+                        || ((vm.pSprite->yrepeat * (tilesiz[vm.pSprite->picnum].y + 8)) << 2) < (vm.pActor->floorz - vm.pActor->ceilingz))
+                    {
+                        tw = ((*insptr) - vm.pSprite->yrepeat) << 1;
+                        if (klabs(tw))
+                            vm.pSprite->yrepeat += ksgn(tw);
+                    }
+                }
+                else
+                {
+                    if (klabs(tw) > 2)
+                        vm.pSprite->xrepeat += ksgn(tw);
+
                     tw = ((*insptr) - vm.pSprite->yrepeat) << 1;
-                    if (klabs(tw))
+
+                    if (klabs(tw) > 2)
                         vm.pSprite->yrepeat += ksgn(tw);
                 }
 
@@ -4116,6 +4137,7 @@ breakfor:
 
                     static char const s_KeyboardFormat[] = "[%s]";
                     static char const s_JoystickFormat[] = "(%s)";
+                    static char const s_MouseFormat[] = "<%s>";
                     static char const s_Unbound[] = "UNBOUND";
 
                     auto getkeyname = [&](void)
@@ -4124,6 +4146,17 @@ breakfor:
                         if (keyname != nullptr && keyname[0] != '\0')
                         {
                             snprintf(apStrings[quoteIndex], MAXQUOTELEN, s_KeyboardFormat, keyname);
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    auto getmousename = [&](void)
+                    {
+                        char const *mbutname = CONFIG_GetGameFuncOnMouse(gameFunc);
+                        if (mbutname != nullptr && mbutname[0] != '\0')
+                        {
+                            snprintf(apStrings[quoteIndex], MAXQUOTELEN, s_MouseFormat, mbutname);
                             return true;
                         }
                         return false;
@@ -4142,12 +4175,12 @@ breakfor:
 
                     if (CONTROL_LastSeenInput == LastSeenInput::Joystick)
                     {
-                        if (getjoyname() || getkeyname()) dispatch();
+                        if (getjoyname() || getmousename() || getkeyname()) dispatch();
                         snprintf(apStrings[quoteIndex], MAXQUOTELEN, s_JoystickFormat, s_Unbound);
                     }
                     else
                     {
-                        if (getkeyname() || getjoyname()) dispatch();
+                        if (getmousename() || getkeyname() || getjoyname()) dispatch();
                         snprintf(apStrings[quoteIndex], MAXQUOTELEN, s_KeyboardFormat, s_Unbound);
                     }
 
@@ -5532,7 +5565,7 @@ breakfor:
                     int outputPos = 0;
                     int argIdx    = 0;
 
-                    while (VM_DECODE_INST(*insptr) != CON_NULLOP && argIdx < 32)
+                    while (*insptr != INT_MAX && argIdx < 32)
                         arg[argIdx++] = Gv_GetVar(*insptr++);
 
                     int numArgs = argIdx;
@@ -7332,6 +7365,7 @@ void G_RestoreMapState(void)
 
         G_ClearFIFO();
         G_ResetTimers(0);
+        G_ResetViewScreenData();
     }
 }
 

@@ -584,6 +584,8 @@ static tokenmap_t const vm_keywords[] =
     { "writearraytofile",       CON_WRITEARRAYTOFILE },
     { "xorvar",                 CON_XORVAR },
     { "xorvarvar",              CON_XORVARVAR },
+    { "yield",                  CON_YIELD },
+    { "__yieldjump",            CON_YIELDJUMP },
     { "zshootvar",              CON_ZSHOOT },
     { "{",                      CON_LEFTBRACE },
     { "}",                      CON_RIGHTBRACE },
@@ -3355,7 +3357,7 @@ DO_DEFSTATE:
             else // if (tw == CON_APPENDEVENT)
             {
                 auto previous_event_end = apScript + apScriptGameEventEnd[j];
-                scriptWriteAtOffset(CON_JUMP | LINE_NUMBER, previous_event_end++);
+                scriptWriteAtOffset(((g_currentEvent == EVENT_WORLD || g_currentEvent == EVENT_PREWORLD) ? CON_YIELDJUMP : CON_JUMP) | LINE_NUMBER, previous_event_end++);
                 scriptWriteAtOffset(GV_FLAG_CONSTANT, previous_event_end++);
                 C_FillEventBreakStackWithJump((intptr_t *)*previous_event_end, g_scriptEventOffset);
                 scriptWriteAtOffset(g_scriptEventOffset, previous_event_end++);
@@ -3373,7 +3375,7 @@ DO_DEFSTATE:
             while (C_GetKeyword() == -1 && j < 32)
                 C_GetNextVar(), j++;
 
-            scriptWriteValue(CON_NULLOP | LINE_NUMBER);
+            scriptWriteValue(INT_MAX);
             continue;
 
         case CON_CSTAT:
@@ -3841,6 +3843,7 @@ DO_DEFSTATE:
         case CON_GUNIQHUDID:
         case CON_INITTIMER:
         case CON_JUMP:
+        case CON_YIELDJUMP:
         case CON_LOCKPLAYER:
         case CON_MOVESECTOR:
         case CON_OPERATEMASTERSWITCHES:
@@ -6085,6 +6088,13 @@ repeatcase:
 
             float volume = 1.0;
 
+            if (C_GetKeyword() == -1)
+            {
+                C_GetNextValue(LABEL_DEFINE);
+                volume = float(g_scriptPtr[-1]) * (1.f/255.f);
+                g_scriptPtr--;
+            }
+
             S_DefineSound(k, filename, minpitch, maxpitch, priority, type, distance, volume);
 
             if (k > g_highestSoundIdx)
@@ -6112,7 +6122,7 @@ repeatcase:
             if (g_scriptEventChainOffset)
             {
                 g_scriptPtr--;
-                scriptWriteValue(CON_JUMP | LINE_NUMBER);
+                scriptWriteValue(((g_currentEvent == EVENT_WORLD || g_currentEvent == EVENT_PREWORLD) ? CON_YIELDJUMP : CON_JUMP) | LINE_NUMBER);
                 scriptWriteValue(GV_FLAG_CONSTANT);
                 scriptWriteValue(g_scriptEventChainOffset);
                 scriptWriteValue(CON_ENDEVENT | LINE_NUMBER);
@@ -6158,6 +6168,7 @@ repeatcase:
                 g_checkingCase = false;
                 return 1;
             }
+        case CON_YIELD:
             continue;
 
         case CON_CONTINUE:

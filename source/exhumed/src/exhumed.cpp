@@ -2011,6 +2011,15 @@ int app_main(int argc, char const* const* argv)
                     i++;
                 }
             }
+            else if (Bstrcasecmp(pChar, "gamegrp") == 0)
+            {
+                if (argc > i + 1)
+                {
+                    clearGrpNamePtr();
+                    g_grpNamePtr = dup_filename(argv[i + 1]);
+                    i++;
+                }
+            }
             else if (Bstrcasecmp(pChar, "g") == 0)
             {
                 if (argc > i + 1)
@@ -2032,6 +2041,14 @@ int app_main(int argc, char const* const* argv)
                 if (argc > i + 1)
                 {
                     G_AddPath(argv[i + 1]);
+                    i++;
+                }
+            }
+            else if (Bstrcasecmp(pChar, "mh") == 0)
+            {
+                if (argc > i + 1)
+                {
+                    G_AddDefModule(argv[i + 1]);
                     i++;
                 }
             }

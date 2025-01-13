@@ -103,7 +103,6 @@ char modechange=1;
 char offscreenrendering=0;
 char videomodereset = 0;
 int32_t nofog=0;
-char g_controllerSupportDisabled;
 #ifndef EDUKE32_GLES
 static uint16_t sysgamma[3][256];
 #endif
@@ -742,7 +741,7 @@ int32_t initsystem(void)
 #endif
 
 #ifndef _WIN32
-        const char *drvname = SDL_GetVideoDriver(0);
+        const char *drvname = SDL_GetCurrentVideoDriver();
 
         if (drvname)
             LOG_F(INFO, "Using '%s' video driver.", drvname);
@@ -975,10 +974,19 @@ void joyScanDevices()
 
                 inputdevices |= DEV_JOYSTICK;
 
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
+                {
+                    if (SDL_GameControllerHasRumble(controller))
+                        joystick.hasRumble = 1;
+                    else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
+                }
+                else
+#endif
 #if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
-                    if (!SDL_GameControllerRumble(controller, 0xc000, 0xc000, 10))
+                    if (!SDL_GameControllerRumble(controller, 1, 1, 1))
                         joystick.hasRumble = 1;
                     else DVLOG_F(LOG_INPUT, "Couldn't init controller rumble: %s.", SDL_GetError());
                 }
@@ -1021,10 +1029,19 @@ void joyScanDevices()
                 SDL_JoystickEventState(SDL_ENABLE);
                 inputdevices |= DEV_JOYSTICK;
 
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 18))
+                {
+                    if (SDL_JoystickHasRumble(joydev))
+                        joystick.hasRumble = 1;
+                    else DVLOG_F(LOG_INPUT, "Couldn't init joystick rumble: %s.", SDL_GetError());
+                }
+                else
+#endif
 #if SDL_VERSION_ATLEAST(2, 0, 9)
                 if (EDUKE32_SDL_LINKED_PREREQ(linked, 2, 0, 9))
                 {
-                    if (!SDL_JoystickRumble(joydev, 0xffff, 0xffff, 200))
+                    if (!SDL_JoystickRumble(joydev, 1, 1, 1))
                         joystick.hasRumble = 1;
                     else DVLOG_F(LOG_INPUT, "Couldn't init joystick rumble: %s.", SDL_GetError());
                 }
@@ -1081,9 +1098,17 @@ int32_t initinput(void(*hotplugCallback)(void) /*= nullptr*/)
         Bstrncpyz(g_keyNameTable[keytranslation[i]], SDL_GetKeyName(SDL_SCANCODE_TO_KEYCODE(i)), sizeof(g_keyNameTable[0]));
     }
 
-    if (!g_controllerSupportDisabled)
+    if ((g_controllerSupportFlags & CONTROLLER_DISABLED) == 0)
     {
 #if SDL_MAJOR_VERSION >= 2
+# if defined SDL_HINT_DIRECTINPUT_ENABLED
+        if (g_controllerSupportFlags & CONTROLLER_NO_DINPUT)
+            SDL_SetHint(SDL_HINT_DIRECTINPUT_ENABLED, "0");
+# endif
+# if defined SDL_HINT_XINPUT_ENABLED
+        if (g_controllerSupportFlags & CONTROLLER_NO_XINPUT)
+            SDL_SetHint(SDL_HINT_XINPUT_ENABLED, "0");
+# endif
         if (!SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER))
 #else
         if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK))
@@ -1849,6 +1874,7 @@ int32_t videoSetMode(int32_t x, int32_t y, int32_t c, int32_t fs)
 
               { SDL_GL_STENCIL_SIZE, 1 },
               { SDL_GL_ACCELERATED_VISUAL, 1 },
+              { SDL_GL_DEPTH_SIZE, 24 },
           };
 
         SDL_GL_ATTRIBUTES(i, sdlayer_gl_attributes);

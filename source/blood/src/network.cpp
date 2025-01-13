@@ -243,30 +243,18 @@ void CalcGameChecksum(void)
     gChecksum[0] = wrand();
     for (int p = connecthead; p >= 0; p = connectpoint2[p])
     {
-        int *pBuffer = &gPlayer[p].used1;
+        gChecksum[1] ^= gPlayer[p].CalcNonSpriteChecksum();
+
+        int *pBuffer = (int*)gPlayer[p].pSprite;
         int sum = 0;
-        int length = ((char*)&gPlayer[p+1]-(char*)pBuffer)/4;
-        while (length--)
-        {
-            sum += *pBuffer++;
-        }
-        gChecksum[1] ^= sum;
-        pBuffer = (int*)gPlayer[p].pSprite;
-        sum = 0;
-        length = sizeof(spritetype)/4;
+        int length = sizeof(spritetype)/4;
         while (length--)
         {
             sum += *pBuffer++;
         }
         gChecksum[2] ^= sum;
-        pBuffer = (int*)gPlayer[p].pXSprite;
-        sum = 0;
-        length = sizeof(XSPRITE)/4;
-        while (length--)
-        {
-            sum += *pBuffer++;
-        }
-        gChecksum[3] ^= sum;
+
+        gChecksum[3] ^= gPlayer[p].pXSprite->CalcChecksum();
     }
 }
 
@@ -547,11 +535,11 @@ void netBroadcastPlayerInfo(int nPlayer)
 {
     PROFILE *pProfile = &gProfile[nPlayer];
     Bstrncpyz(pProfile->name, szPlayerName, sizeof(szPlayerName));
-    pProfile->skill = gSkill;
     pProfile->nAutoAim = gAutoAim;
     pProfile->nWeaponSwitch = gWeaponSwitch;
     if (numplayers < 2)
         return;
+    pProfile->skill = gSkill;
     char *pPacket = packet;
     PutPacketByte(pPacket, 251);
     PutPacketBuffer(pPacket, pProfile, sizeof(PROFILE));
@@ -645,7 +633,7 @@ void netSendEmptyPackets(void)
     {
         if (nClock <= totalclock)
         {
-            nClock = totalclock+4;
+            nClock = totalclock+kTicsPerFrame;
             netSendPacketAll(packet, pPacket-packet);
         }
     }

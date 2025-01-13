@@ -270,7 +270,7 @@ void WeaponPlay(PLAYER *pPlayer)
     QAV *pQAV = weaponQAV[pPlayer->weaponQav];
     pQAV->nSprite = pPlayer->pSprite->index;
     int nTicks = pQAV->at10 - pPlayer->weaponTimer;
-    pQAV->Play(nTicks-4, nTicks, pPlayer->qavCallback, pPlayer);
+    pQAV->Play(nTicks-kTicsPerFrame, nTicks, pPlayer->qavCallback, pPlayer);
 }
 
 void StartQAV(PLAYER *pPlayer, int nWeaponQAV, int a3 = -1, char a4 = 0)
@@ -282,7 +282,7 @@ void StartQAV(PLAYER *pPlayer, int nWeaponQAV, int a3 = -1, char a4 = 0)
     pPlayer->qavLoop = a4;
     weaponQAV[nWeaponQAV]->Preload();
     WeaponPlay(pPlayer);
-    pPlayer->weaponTimer -= 4;
+    pPlayer->weaponTimer -= kTicsPerFrame;
 }
 
 struct WEAPONTRACK
@@ -500,6 +500,8 @@ void WeaponRaise(PLAYER *pPlayer)
     case kWeaponTNT:
         if (gInfiniteAmmo || checkAmmo2(pPlayer, 5, 1))
         {
+            if ((pPlayer->weaponState == 2) && (prevWeapon == kWeaponNone) && !VanillaMode()) // if quickly switching from tnt to spray can and back, don't put away lighter
+                prevWeapon = kWeaponSprayCan;
             pPlayer->weaponState = 3;
             if (prevWeapon == kWeaponSprayCan)
                 StartQAV(pPlayer, 16, -1, 0);
@@ -628,7 +630,8 @@ void WeaponLower(PLAYER *pPlayer)
     if (checkLitSprayOrTNT(pPlayer))
         return;
     pPlayer->throwPower = 0;
-    int prevState = pPlayer->weaponState;
+    const int prevState = pPlayer->weaponState;
+    const int prevWeapon = pPlayer->curWeapon;
     switch (pPlayer->curWeapon)
     {
     case kWeaponPitchfork:
@@ -643,15 +646,12 @@ void WeaponLower(PLAYER *pPlayer)
             {
                 StartQAV(pPlayer, 7, -1, 0);
             }
-            else
+            else if (pPlayer->input.newWeapon == kWeaponTNT) // do not put away lighter if TNT was selected while throwing a spray can
             {
-                if (pPlayer->input.newWeapon == kWeaponTNT) // do not put away lighter if TNT was selected while throwing a spray can
-                {
-                    pPlayer->weaponState = 2;
-                    StartQAV(pPlayer, 11, -1, 0);
-                    WeaponRaise(pPlayer);
-                    return;
-                }
+                pPlayer->weaponState = 2;
+                StartQAV(pPlayer, 11, -1, 0);
+                WeaponRaise(pPlayer);
+                return;
             }
             break;
         case 2:
@@ -666,18 +666,24 @@ void WeaponLower(PLAYER *pPlayer)
                 pPlayer->input.newWeapon = kWeaponNone;
                 WeaponLower(pPlayer);
             }
+            else if (pPlayer->input.newWeapon == kWeaponTNT)
+            {
+                pPlayer->weaponState = 2;
+                StartQAV(pPlayer, 11, -1, 0);
+                return;
+            }
             else
             {
-                if (pPlayer->input.newWeapon == kWeaponTNT)
-                {
-                    pPlayer->weaponState = 2;
-                    StartQAV(pPlayer, 11, -1, 0);
-                    return;
-                }
-                else
-                {
-                    WeaponLower(pPlayer);
-                }
+                WeaponLower(pPlayer);
+            }
+            break;
+        case 0:
+            if ((pPlayer->input.newWeapon == kWeaponTNT) && !VanillaMode()) // if switched to tnt before lighter is ignited, don't execute spray can equip qav
+            {
+                pPlayer->weaponState = 3;
+                StartQAV(pPlayer, 16, -1, 0);
+                WeaponRaise(pPlayer);
+                return;
             }
             break;
         case 3:
@@ -687,20 +693,15 @@ void WeaponLower(PLAYER *pPlayer)
                 StartQAV(pPlayer, 11, -1, 0);
                 return;
             }
-            else if (pPlayer->input.newWeapon == kWeaponSprayCan)
+            pPlayer->weaponState = 1;
+            StartQAV(pPlayer, 11, -1, 0);
+            if (pPlayer->input.newWeapon == kWeaponSprayCan)
             {
-                pPlayer->weaponState = 1;
-                StartQAV(pPlayer, 11, -1, 0);
                 pPlayer->input.newWeapon = kWeaponNone;
                 WeaponLower(pPlayer);
             }
-            else
-            {
-                pPlayer->weaponState = 1;
-                StartQAV(pPlayer, 11, -1, 0);
-            }
             break;
-        case 7: // throwing ignited alt fire spray
+        case 7: // throwing ignited alt fire spray (this happens when submerging underwater while holding down throw spray can)
             if (VanillaMode() || (pPlayer->input.newWeapon != kWeaponNone))
                 break;
             pPlayer->weaponState = 1;
@@ -712,10 +713,10 @@ void WeaponLower(PLAYER *pPlayer)
         switch (prevState)
         {
         case 1:
-            if (!VanillaMode() && (pPlayer->input.newWeapon == kWeaponSprayCan)) // do not put away lighter after TNT is thrown if while throwing the weapon was switched already to spray
+            if (!VanillaMode() && (pPlayer->input.newWeapon == kWeaponSprayCan)) // do not put away lighter if switched to spray can
             {
                 pPlayer->weaponState = 2;
-                StartQAV(pPlayer, 17, -1, 0);
+                StartQAV(pPlayer, 11, -1, 0);
                 WeaponRaise(pPlayer);
                 return;
             }
@@ -759,7 +760,7 @@ void WeaponLower(PLAYER *pPlayer)
         }
         break;
     case kWeaponShotgun:
-        if (powerupCheck(pPlayer, kPwUpTwoGuns))
+        if (powerupCheck(pPlayer, kPwUpTwoGuns) && (VanillaMode() || (gInfiniteAmmo || CheckAmmo(pPlayer, 2, 4))))
             StartQAV(pPlayer, 63, -1, 0);
         else
             StartQAV(pPlayer, 58, -1, 0);
@@ -786,7 +787,7 @@ void WeaponLower(PLAYER *pPlayer)
             StartQAV(pPlayer, 81, -1, 0);
         break;
     case kWeaponNapalm:
-        if (powerupCheck(pPlayer, kPwUpTwoGuns))
+        if (powerupCheck(pPlayer, kPwUpTwoGuns) && (VanillaMode() || (gInfiniteAmmo || CheckAmmo(pPlayer, 4, 2))))
             StartQAV(pPlayer, 124, -1, 0);
         else
             StartQAV(pPlayer, 92, -1, 0);
@@ -800,6 +801,9 @@ void WeaponLower(PLAYER *pPlayer)
     }
     pPlayer->curWeapon = kWeaponNone;
     pPlayer->qavLoop = 0;
+
+    if ((prevWeapon != kWeaponTNT && prevWeapon != kWeaponSprayCan) && !VanillaMode()) // reset weapon state after switching weapon (except when switching from tnt/spray)
+        pPlayer->weaponState = 0;
 }
 
 void WeaponUpdateState(PLAYER *pPlayer)
@@ -930,7 +934,9 @@ void WeaponUpdateState(PLAYER *pPlayer)
             {
                 sfxPlay3DSound(pPlayer->pSprite, 410, 3, 2);
                 StartQAV(pPlayer, 57, nClientEjectShell, 0);
-                if (gInfiniteAmmo || pPlayer->ammoCount[2] > 1)
+                if (powerupCheck(pPlayer, kPwUpTwoGuns) && (gInfiniteAmmo || CheckAmmo(pPlayer, 2, 4)) && !VanillaMode()) // if we now have enough ammo to carry two shotguns, update the gun state and give back our second shotgun
+                    pPlayer->weaponState = 7;
+                else if (gInfiniteAmmo || pPlayer->ammoCount[2] > 1)
                     pPlayer->weaponState = 3;
                 else
                     pPlayer->weaponState = 2;
@@ -996,7 +1002,7 @@ void WeaponUpdateState(PLAYER *pPlayer)
         switch (vb)
         {
         case 3:
-            if (powerupCheck(pPlayer, kPwUpTwoGuns) && (gInfiniteAmmo || CheckAmmo(pPlayer,4, 4)))
+            if (powerupCheck(pPlayer, kPwUpTwoGuns) && (gInfiniteAmmo || CheckAmmo(pPlayer, 4, VanillaMode() ? 4 : 2)))
                 pPlayer->weaponQav = 121;
             else
                 pPlayer->weaponQav = 90;
@@ -1789,7 +1795,7 @@ char WeaponFindLoaded(PLAYER *pPlayer, int *a2)
     if (weapon == kWeaponPitchfork)
     {
         int vc = 0;
-        for (int i = 0; i < 14; i++)
+        for (int i = 0; i < kWeaponMax; i++)
         {
             int weapon = pPlayer->weaponOrder[vc][i];
             if (pPlayer->hasWeapon[weapon])
@@ -2019,7 +2025,7 @@ void WeaponProcess(PLAYER *pPlayer) {
     }
     WeaponPlay(pPlayer);
     UpdateAimVector(pPlayer);
-    pPlayer->weaponTimer -= 4;
+    pPlayer->weaponTimer -= kTicsPerFrame;
     char bShoot = pPlayer->input.buttonFlags.shoot;
     char bShoot2 = pPlayer->input.buttonFlags.shoot2;
     if (pPlayer->qavLoop && pPlayer->pXSprite->health > 0)
@@ -2406,7 +2412,7 @@ void WeaponProcess(PLAYER *pPlayer) {
             }
             break;
         case kWeaponNapalm:
-            if (powerupCheck(pPlayer, kPwUpTwoGuns))
+            if (powerupCheck(pPlayer, kPwUpTwoGuns) && (VanillaMode() || (gInfiniteAmmo || CheckAmmo(pPlayer, 4, 2))))
                 StartQAV(pPlayer, 122, nClientFireNapalm, 0);
             else
                 StartQAV(pPlayer, 91, nClientFireNapalm, 0);

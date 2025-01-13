@@ -79,6 +79,7 @@ extern int gCacheMiss;
 extern int gDoQuickSave;
 extern int gMenuPicnum;
 
+extern bool bVanilla;
 extern int currentEpLevel;
 extern int currentLevel;
 extern int levelCounter;
@@ -95,8 +96,8 @@ void ProcessFrame(void);
 void ScanINIFiles(void);
 bool LoadArtFile(const char *pzFile);
 void LoadExtraArts(void);
-bool DemoRecordStatus(void);
-bool VanillaMode(void);
+void VanillaModeUpdate(void);
+inline bool VanillaMode(void) {return bVanilla;}
 bool fileExistsRFF(int id, const char* ext);
 int sndTryPlaySpecialMusic(int nMusic);
 void sndPlaySpecialMusicOrNothing(int nMusic);
