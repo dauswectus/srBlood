@@ -1318,10 +1318,22 @@ void viewDrawStats(PLAYER *pPlayer, int x, int y)
     if (gViewMode == 3 && gViewSize > 3 && gLastPageTimeStats != gLevelTime) // redraw borders
         viewUpdatePages();
     gLastPageTimeStats = gLevelTime;
+}
+
+void viewDrawSpeedo(PLAYER* pPlayer)
+{
     if (gShowSpeedo)
     {
-        y += nHeight + 1;
-        x += 210;
+        int x;
+        int y;
+        const int nFont = 3;
+        char buffer[128];
+
+        int nHeight;
+
+        viewGetFontInfo(nFont, NULL, NULL, &nHeight);
+        y = gSpeedoY;
+        x = gSpeedoX;
         sprintf(buffer, "%d", gPlayerSpeed / 10000);
         viewDrawText(3, buffer, x, y, 20, 0, 0, true, 256);
     }
@@ -1782,6 +1794,8 @@ void UpdateStatusBar(ClockTicks arg)
             viewDrawPack(pPlayer, 166, 200-tilesiz[2201].y/2-30);
         viewDrawStats(pPlayer, 2, 140);
         viewDrawPowerUps(pPlayer);
+
+        viewDrawSpeedo(pPlayer);
     }
     else if (gViewSize <= 2)
     {
@@ -1848,6 +1862,7 @@ void UpdateStatusBar(ClockTicks arg)
             }
         }
         viewDrawStats(pPlayer, 2, 140);
+        viewDrawSpeedo(pPlayer);
         viewDrawPowerUps(pPlayer);
     }
     else if (gViewSize > 2)
@@ -1935,6 +1950,7 @@ void UpdateStatusBar(ClockTicks arg)
             TileHGauge(2260, 124, 175, pPlayer->throwPower, 65536);
         }
         viewDrawStats(pPlayer, 2, 140);
+        viewDrawSpeedo(pPlayer);
         viewDrawPowerUps(pPlayer);
     }
 
@@ -4259,7 +4275,7 @@ void viewResetCrosshairToDefault(void)
 
 #define FPS_COLOR(x) ((x) ? COLOR_RED : COLOR_WHITE)
 
-int32_t gShowFps, gFramePeriod, gShowSpeedo;
+int32_t gShowFps, gFramePeriod, gShowSpeedo, gSpeedoX, gSpeedoY;
 
 void viewPrintFPS(void)
 {
